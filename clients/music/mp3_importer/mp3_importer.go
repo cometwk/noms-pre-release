@@ -8,6 +8,7 @@ import (
 	"os"
 
 	id3go "github.com/attic-labs/noms/Godeps/_workspace/src/github.com/mikkyang/id3-go"
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/dataset"
 	"github.com/attic-labs/noms/types"
 )
@@ -36,12 +37,12 @@ func addMp3(ds *dataset.Dataset, filename string) {
 		Artist: id3.Artist(),
 		Album:  id3.Album(),
 		Year:   id3.Year(),
-		Mp3:    types.NewBlob(bufio.NewReader(mp3_file), ds.Store()),
+		Mp3:    types.NewBlob(bufio.NewReader(mp3_file), ds.Store()).Ref(),
 	}.New()
 	songs := readSongsFromDataset(ds).Append(new_song)
 	if _, ok := ds.Commit(songs); ok {
 		fmt.Println("Successfully committed", filename)
-		printSong(new_song)
+		printSong(new_song, ds.Store())
 	} else {
 		log.Fatalln("Failed to commit", filename)
 	}
@@ -59,7 +60,7 @@ func listSongs(ds *dataset.Dataset) {
 	}
 	songs.IterAll(func(song Song, i uint64) {
 		fmt.Printf("(%d)\n", i)
-		printSong(song)
+		printSong(song, ds.Store())
 	})
 }
 
@@ -71,12 +72,12 @@ func readSongsFromDataset(ds *dataset.Dataset) ListOfSong {
 	return songs
 }
 
-func printSong(song Song) {
+func printSong(song Song, cs chunks.ChunkSource) {
 	fmt.Println("     Title:", song.Title())
 	fmt.Println("    Artist:", song.Artist())
 	fmt.Println("     Album:", song.Album())
 	fmt.Println("      Year:", song.Year())
-	fmt.Println("      Size:", song.Mp3().Len())
+	fmt.Println("      Size:", song.Mp3().TargetValue(cs).Len())
 }
 
 func main() {

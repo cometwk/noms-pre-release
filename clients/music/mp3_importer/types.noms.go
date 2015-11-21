@@ -3,6 +3,7 @@
 package main
 
 import (
+	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/ref"
 	"github.com/attic-labs/noms/types"
 )
@@ -20,7 +21,7 @@ func init() {
 				types.Field{"Artist", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Album", types.MakePrimitiveType(types.StringKind), false},
 				types.Field{"Year", types.MakePrimitiveType(types.StringKind), false},
-				types.Field{"Mp3", types.MakePrimitiveType(types.BlobKind), false},
+				types.Field{"Mp3", types.MakeCompoundType(types.RefKind, types.MakePrimitiveType(types.BlobKind)), false},
 			},
 			types.Choices{},
 		),
@@ -35,7 +36,7 @@ type Song struct {
 	_Artist string
 	_Album  string
 	_Year   string
-	_Mp3    types.Blob
+	_Mp3    RefOfBlob
 
 	ref *ref.Ref
 }
@@ -46,7 +47,7 @@ func NewSong() Song {
 		_Artist: "",
 		_Album:  "",
 		_Year:   "",
-		_Mp3:    types.NewEmptyBlob(),
+		_Mp3:    NewRefOfBlob(ref.Ref{}),
 
 		ref: &ref.Ref{},
 	}
@@ -57,7 +58,7 @@ type SongDef struct {
 	Artist string
 	Album  string
 	Year   string
-	Mp3    types.Blob
+	Mp3    ref.Ref
 }
 
 func (def SongDef) New() Song {
@@ -66,7 +67,7 @@ func (def SongDef) New() Song {
 		_Artist: def.Artist,
 		_Album:  def.Album,
 		_Year:   def.Year,
-		_Mp3:    def.Mp3,
+		_Mp3:    NewRefOfBlob(def.Mp3),
 		ref:     &ref.Ref{},
 	}
 }
@@ -76,7 +77,7 @@ func (s Song) Def() (d SongDef) {
 	d.Artist = s._Artist
 	d.Album = s._Album
 	d.Year = s._Year
-	d.Mp3 = s._Mp3
+	d.Mp3 = s._Mp3.TargetRef()
 	return
 }
 
@@ -102,7 +103,7 @@ func builderForSong(values []types.Value) types.Value {
 	i++
 	s._Year = values[i].(types.String).String()
 	i++
-	s._Mp3 = values[i].(types.Blob)
+	s._Mp3 = values[i].(RefOfBlob)
 	i++
 	return s
 }
@@ -181,11 +182,11 @@ func (s Song) SetYear(val string) Song {
 	return s
 }
 
-func (s Song) Mp3() types.Blob {
+func (s Song) Mp3() RefOfBlob {
 	return s._Mp3
 }
 
-func (s Song) SetMp3(val types.Blob) Song {
+func (s Song) SetMp3(val RefOfBlob) Song {
 	s._Mp3 = val
 	s.ref = &ref.Ref{}
 	return s
@@ -331,4 +332,61 @@ func (l ListOfSong) Filter(cb ListOfSongFilterCallback) ListOfSong {
 		return cb(v.(Song), i)
 	})
 	return ListOfSong{out, &ref.Ref{}}
+}
+
+// RefOfBlob
+
+type RefOfBlob struct {
+	target ref.Ref
+	ref    *ref.Ref
+}
+
+func NewRefOfBlob(target ref.Ref) RefOfBlob {
+	return RefOfBlob{target, &ref.Ref{}}
+}
+
+func (r RefOfBlob) TargetRef() ref.Ref {
+	return r.target
+}
+
+func (r RefOfBlob) Ref() ref.Ref {
+	return types.EnsureRef(r.ref, r)
+}
+
+func (r RefOfBlob) Equals(other types.Value) bool {
+	return other != nil && __typeForRefOfBlob.Equals(other.Type()) && r.Ref() == other.Ref()
+}
+
+func (r RefOfBlob) Chunks() (chunks []ref.Ref) {
+	chunks = append(chunks, r.Type().Chunks()...)
+	chunks = append(chunks, r.target)
+	return
+}
+
+func (r RefOfBlob) ChildValues() []types.Value {
+	return nil
+}
+
+// A Noms Value that describes RefOfBlob.
+var __typeForRefOfBlob types.Type
+
+func (m RefOfBlob) Type() types.Type {
+	return __typeForRefOfBlob
+}
+
+func init() {
+	__typeForRefOfBlob = types.MakeCompoundType(types.RefKind, types.MakePrimitiveType(types.BlobKind))
+	types.RegisterRef(__typeForRefOfBlob, builderForRefOfBlob)
+}
+
+func builderForRefOfBlob(r ref.Ref) types.Value {
+	return NewRefOfBlob(r)
+}
+
+func (r RefOfBlob) TargetValue(cs chunks.ChunkSource) types.Blob {
+	return types.ReadValue(r.target, cs).(types.Blob)
+}
+
+func (r RefOfBlob) SetTargetValue(val types.Blob, cs chunks.ChunkSink) RefOfBlob {
+	return NewRefOfBlob(types.WriteValue(val, cs))
 }

@@ -3,7 +3,7 @@ struct Song {
   Artist: String
   Album: String
   Year: String
-  Mp3: Blob
+  Mp3: Ref(Blob)
 }
 
 using List(Song)

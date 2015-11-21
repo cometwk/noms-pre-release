@@ -13,6 +13,7 @@ import (
 	"github.com/attic-labs/noms/constants"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
+	"github.com/attic-labs/noms/types"
 )
 
 type connectionState struct {
@@ -65,8 +66,8 @@ func (s *dataStoreServer) handleRef(w http.ResponseWriter, req *http.Request) {
 
 		switch req.Method {
 		case "GET":
-			all := req.URL.Query().Get("all")
-			if all == "true" {
+			query := req.URL.Query()
+			if query.Get("all") == "true" {
 				s.handleGetReachable(r, w, req)
 				return
 			}
@@ -76,7 +77,13 @@ func (s *dataStoreServer) handleRef(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 
-			_, err := io.Copy(w, bytes.NewReader(chunk.Data()))
+			var content io.Reader
+			if query.Get("blob") == "true" {
+				content = types.ReadValue(r, s.ds).(types.Blob).Reader()
+			} else {
+				content = bytes.NewReader(chunk.Data())
+			}
+			_, err := io.Copy(w, content)
 			d.Chk.NoError(err)
 			w.Header().Add("Content-Type", "application/octet-stream")
 			w.Header().Add("Cache-Control", "max-age=31536000") // 1 year

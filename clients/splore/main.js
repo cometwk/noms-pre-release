@@ -131,8 +131,18 @@ function handleNodeClick(e: Event, id: string) {
     if (data.links[id] || !data.nodes[id].isOpen) {
       render();
     } else {
-      readValue(Ref.parse(id), httpStore).then(value => {
+      let playing = null
+      let ref = Ref.parse(id);
+      readValue(ref, httpStore).then(value => {
         handleChunkLoad(id, value, id);
+      }).catch(e => {
+        var audio = document.createElement("audio");
+        audio.src = "http://localhost:8000/ref/" + ref.toString() + "?blob=true";
+        if (playing !== null) {
+          playing.pause();
+          playing = audio;
+        }
+        audio.play()
       });
     }
   }
