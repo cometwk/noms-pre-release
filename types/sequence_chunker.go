@@ -84,6 +84,9 @@ func (seq *sequenceChunker) Append(item sequenceItem) {
 	}
 }
 
+func (seq *sequenceChunker) Skip() {
+}
+
 func (seq *sequenceChunker) createParent() {
 	d.Chk.True(seq.parent == nil)
 	var curParent sequenceCursor
@@ -113,6 +116,20 @@ func (seq *sequenceChunker) handleChunkBoundary() {
 }
 
 func (seq *sequenceChunker) Done() Value {
+	if seq.cur != nil {
+		// TODO:
+		// The algorithm only needs to advance past the window size, then fill in the rest of the chunk it ends up in.
+		// It needs to call Skip() on the parent each time it passes over a chunk boundary.
+		/*
+			items, boundaries := cursorGetMaxNNextItems(seq.cur, seq.boundaryChk.WindowSize())
+			for i, item := range items {
+				if _, ok := boundaries[i]; ok {
+					seq.Skip()
+				}
+				seq.Append(item)
+			}
+		*/
+	}
 	if seq.pendingFirst != nil {
 		d.Chk.True(seq.parent == nil)
 		d.Chk.Equal(0, len(seq.current))

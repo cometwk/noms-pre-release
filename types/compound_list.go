@@ -89,8 +89,19 @@ func (cl compoundList) Get(idx uint64) Value {
 }
 
 func (cl compoundList) Append(vs ...Value) compoundList {
+	// TODO implement this as cl.Insert(cl.Len(), vs...)?
 	metaCur, leaf, start := cl.cursorAt(cl.Len())
 	seqCur := newSequenceChunkerCursor(metaCur, listAsSequenceItems(leaf), int(cl.Len()-start), readListLeafChunkFn(cl.cs), cl.cs)
+	seq := newSequenceChunker(seqCur, makeListLeafChunkFn(cl.t, cl.cs), newMetaSequenceChunkFn(cl.t, cl.cs), normalizeChunkNoop, normalizeMetaSequenceChunk, newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
+	for _, v := range vs {
+		seq.Append(v)
+	}
+	return seq.Done().(compoundList)
+}
+
+func (cl compoundList) Insert(idx uint64, vs ...Value) compoundList {
+	metaCur, leaf, start := cl.cursorAt(idx)
+	seqCur := newSequenceChunkerCursor(metaCur, listAsSequenceItems(leaf), int(idx-start), readListLeafChunkFn(cl.cs), cl.cs)
 	seq := newSequenceChunker(seqCur, makeListLeafChunkFn(cl.t, cl.cs), newMetaSequenceChunkFn(cl.t, cl.cs), normalizeChunkNoop, normalizeMetaSequenceChunk, newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
 	for _, v := range vs {
 		seq.Append(v)

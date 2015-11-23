@@ -18,6 +18,7 @@ type metaSequenceCursor struct {
 }
 
 func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkSource) (cursor *metaSequenceCursor, leaf Value) {
+	d.Chk.NotNil(root)
 	cursors := []*metaSequenceCursor{&metaSequenceCursor{nil, root, 0, cs}}
 	for {
 		cursor = cursors[len(cursors)-1]
@@ -65,11 +66,11 @@ func (ms *metaSequenceCursor) getParent() sequenceCursor {
 }
 
 func (ms *metaSequenceCursor) advance() bool {
-	newIdx := ms.idx + 1
-
-	if newIdx < ms.sequence.tupleCount() {
-		ms.idx = newIdx
-		return true
+	if ms.idx < ms.sequence.tupleCount() {
+		ms.idx++
+		if ms.idx < ms.sequence.tupleCount() {
+			return true
+		}
 	}
 
 	if ms.parent != nil && ms.parent.advance() {
@@ -82,10 +83,8 @@ func (ms *metaSequenceCursor) advance() bool {
 }
 
 func (ms *metaSequenceCursor) retreat() bool {
-	newIdx := ms.idx - 1
-
-	if newIdx >= 0 {
-		ms.idx = newIdx
+	if ms.idx > 0 {
+		ms.idx--
 		return true
 	}
 
@@ -111,10 +110,15 @@ func (ms *metaSequenceCursor) indexInChunk() int {
 	return ms.idx
 }
 
-func (ms *metaSequenceCursor) current() sequenceItem {
-	d.Chk.NotNil(ms.sequence)
-	d.Chk.True(ms.idx >= 0 && ms.idx < ms.sequence.tupleCount())
-	return ms.sequence.tupleAt(ms.idx)
+func (ms *metaSequenceCursor) current() (sequenceItem, bool) {
+	switch {
+	case ms.idx < -1 || ms.idx > ms.sequence.tupleCount():
+		panic("illegal")
+	case ms.idx == -1 || ms.idx == ms.sequence.tupleCount():
+		return nil, false
+	default:
+		return ms.sequence.tupleAt(ms.idx), true
+	}
 }
 
 func (ms *metaSequenceCursor) currentVal() Value {
@@ -122,7 +126,9 @@ func (ms *metaSequenceCursor) currentVal() Value {
 }
 
 func (ms *metaSequenceCursor) currentRef() ref.Ref {
-	return ms.current().(metaTuple).ref
+	current, ok := ms.current()
+	d.Chk.True(ok)
+	return current.(metaTuple).ref
 }
 
 type metaSequenceSeekFn func(v, parent Value) bool
