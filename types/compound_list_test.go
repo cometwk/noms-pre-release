@@ -211,7 +211,7 @@ func TestCompoundListInsertStart(t *testing.T) {
 	assert.Equal(2*getTestSimpleListLen()+2, int(cl4.Len()))
 	assert.True(compoundFromTestSimpleList(expected).Equals(cl4))
 
-	expected = append([]Value{Int64(44), Int64(65)}, expected...)
+	expected = append([]Value{Int64(44), Int64(45)}, expected...)
 	assert.Equal(expected, testSimpleFromCompoundList(cl5))
 	assert.Equal(2*getTestSimpleListLen()+4, int(cl5.Len()))
 	assert.True(compoundFromTestSimpleList(expected).Equals(cl5))
@@ -221,3 +221,6 @@ func TestCompoundListInsertStart(t *testing.T) {
 	assert.Equal(3*getTestSimpleListLen()+4, int(cl6.Len()))
 	assert.True(compoundFromTestSimpleList(expected).Equals(cl6))
 }
+
+// TODO also test somehow the number of opeations (number of items dereferenced?) to make sure we're not just looping over the entire tree after all.
+// TODO test the sequence chunker without ever calling append or skip on it. it should result in the same tree.

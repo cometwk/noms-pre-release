@@ -1,27 +1,23 @@
 package types
 
 import (
-	"fmt"
-
-	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 )
 
-// sequenceChunkerCursor wraps a metaSequenceCursor to give it the ability to advance/retreat through individual items, not just meta nodes.
+// sequenceChunkerCursor wraps a sequenceCursor to give it the ability to advance/retreat through individual items.
 type sequenceChunkerCursor struct {
 	parent    sequenceCursor
 	leaf      []sequenceItem
 	leafIdx   int
 	readChunk readChunkFn
-	cs        chunks.ChunkSource
 }
 
 // readChunkFn takes an item in the sequence which points to a chunk, and returns the sequence of items in that chunk.
 type readChunkFn func(sequenceItem) []sequenceItem
 
-func newSequenceChunkerCursor(ms *metaSequenceCursor, leaf []sequenceItem, leafIdx int, readChunk readChunkFn, cs chunks.ChunkSource) sequenceCursor {
-	d.Chk.True(leafIdx >= 0 && leafIdx <= len(leaf), fmt.Sprintf("%d vs %d", leafIdx, len(leaf)))
-	return &sequenceChunkerCursor{ms, leaf, leafIdx, readChunk, cs}
+func newSequenceChunkerCursor(parent sequenceCursor, leaf []sequenceItem, leafIdx int, readChunk readChunkFn) sequenceCursor {
+	d.Chk.True(leafIdx >= 0 && leafIdx <= len(leaf))
+	return &sequenceChunkerCursor{parent, leaf, leafIdx, readChunk}
 }
 
 func (scc *sequenceChunkerCursor) current() (sequenceItem, bool) {
@@ -32,6 +28,14 @@ func (scc *sequenceChunkerCursor) current() (sequenceItem, bool) {
 		return nil, false
 	default:
 		return scc.leaf[scc.leafIdx], true
+	}
+}
+
+func (scc *sequenceChunkerCursor) prevInChunk() (sequenceItem, bool) {
+	if scc.leafIdx > 0 {
+		return scc.leaf[scc.leafIdx-1], true
+	} else {
+		return nil, false
 	}
 }
 
@@ -46,7 +50,7 @@ func (scc *sequenceChunkerCursor) advance() bool {
 			return true
 		}
 	}
-	if scc.parent.advance() {
+	if scc.parent != nil && scc.parent.advance() {
 		current, ok := scc.parent.current()
 		d.Chk.True(ok)
 		scc.leaf = scc.readChunk(current)
@@ -61,7 +65,7 @@ func (scc *sequenceChunkerCursor) retreat() bool {
 		scc.leafIdx--
 		return true
 	}
-	if scc.parent.retreat() {
+	if scc.parent != nil && scc.parent.retreat() {
 		current, ok := scc.parent.current()
 		d.Chk.True(ok)
 		scc.leaf = scc.readChunk(current)
@@ -92,9 +96,12 @@ func (scc *sequenceChunkerCursor) clone() sequenceCursor {
 		parent = scc.parent.clone()
 	}
 
-	return &sequenceChunkerCursor{parent, scc.leaf, scc.leafIdx, scc.readChunk, scc.cs}
+	return &sequenceChunkerCursor{parent, scc.leaf, scc.leafIdx, scc.readChunk}
 }
 
 func (scc *sequenceChunkerCursor) getParent() sequenceCursor {
+	if scc.parent == nil {
+		return nil
+	}
 	return scc.parent
 }

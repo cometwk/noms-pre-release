@@ -6,6 +6,7 @@ type sequenceCursor interface {
 	getParent() sequenceCursor
 	clone() sequenceCursor
 	current() (sequenceItem, bool)
+	prevInChunk() (sequenceItem, bool)
 	advance() bool
 	retreat() bool
 	indexInChunk() int
@@ -32,21 +33,32 @@ func cursorGetMaxNPrevItems(seq sequenceCursor, n int) []sequenceItem {
 }
 
 // Returns a slice of the next |n| items in |seq|, including the current item in |seq|. Does not
+// TODO "plus last chunk"
 func cursorGetMaxNNextItems(seq sequenceCursor, n int) []sequenceItem {
 	next := []sequenceItem{}
 	if n == 0 {
 		return next
 	}
 
-	current, ok := seq.current()
-	if !ok {
-		return next
-	} else {
+	{
+		current, ok := seq.current()
+		if !ok {
+			return next
+		}
 		next = append(next, current)
 	}
 
 	advancer := seq.clone()
-	for i := 1; i < n && advancer.advance(); i++ {
+	for i := 1; i < n; i++ {
+		if !advancer.advance() {
+			return next
+		}
+		current, ok := advancer.current()
+		d.Chk.True(ok)
+		next = append(next, current)
+	}
+
+	for advancer.advance() && advancer.indexInChunk() > 0 {
 		current, ok := advancer.current()
 		d.Chk.True(ok)
 		next = append(next, current)

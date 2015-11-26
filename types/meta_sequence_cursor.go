@@ -121,6 +121,14 @@ func (ms *metaSequenceCursor) current() (sequenceItem, bool) {
 	}
 }
 
+func (ms *metaSequenceCursor) prevInChunk() (sequenceItem, bool) {
+	if ms.idx > 0 {
+		return ms.sequence.tupleAt(ms.idx - 1), true
+	} else {
+		return nil, false
+	}
+}
+
 func (ms *metaSequenceCursor) currentVal() Value {
 	return ReadValue(ms.currentRef(), ms.cs)
 }
