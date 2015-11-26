@@ -78,11 +78,12 @@ func newSequenceChunker(cur sequenceCursor, makeChunk, parentMakeChunk makeChunk
 		// TODO should this be WindowSize()-1?
 		// TODO I think this needs to be nzeChunk(nil, ...).
 		// TODO Regarding nzeChunk, this might suffer from the problem below: that we may be normalizing across several chunks, and the offsets are reset on every chunk, but normalization will continue to be subtracted. How does this work?
-		for _, item := range nzeChunk(nil, cursorGetMaxNPrevItems(cur, boundaryChk.WindowSize())) {
+		for _, item := range nzeChunk(nil, cursorGetMaxNPrevItems(cur, boundaryChk.WindowSize()-1)) {
 			boundaryChk.Write(item)
 		}
 		// Reconstruct this entire chunk.
 		seq.current = nzeChunk(nil, cursorGetMaxNPrevItems(cur, cur.indexInChunk()))
+		seq.empty = len(seq.current) == 0
 	}
 
 	return seq
@@ -140,7 +141,7 @@ func (seq *sequenceChunker) handleChunkBoundary() {
 
 func (seq *sequenceChunker) doneWithChunk() (sequenceItem, Value) {
 	if seq.cur != nil {
-		remainder := cursorGetMaxNNextItems(seq.cur, seq.boundaryChk.WindowSize()) // TODO WindowSize()-1 ?
+		remainder := cursorGetMaxNNextItems(seq.cur, seq.boundaryChk.WindowSize()-1) // TODO WindowSize()-1 ?
 		// Carve up the remainder into chunks so that each can be normalized.
 		boundaryDetector := seq.cur.clone()
 		var chunks [][]sequenceItem
@@ -165,21 +166,6 @@ func (seq *sequenceChunker) doneWithChunk() (sequenceItem, Value) {
 				seq.Append(n)
 			}
 		}
-
-		/*
-			prev, _ := seq.cur.prevInChunk() // prev might be nil, but that's fine
-			// TODO should this be WindowSize()-1?
-			next := seq.nzeChunk(prev, cursorGetMaxNNextItems(seq.cur, seq.boundaryChk.WindowSize()))
-			boundaryDetector := seq.cur.clone()
-			for i, n := range next {
-				// The check for i>0 is because the cursor may be at the start of a chunk.
-				if seq.parent != nil && i > 0 && boundaryDetector.indexInChunk() == 0 {
-					seq.parent.Skip()
-				}
-				seq.Append(n)
-				boundaryDetector.advance()
-			}
-		*/
 	}
 	if seq.pendingFirst != nil {
 		d.Chk.True(seq.parent == nil)

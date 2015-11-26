@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 
@@ -12,6 +13,19 @@ type testSimpleList []Value
 
 func (tsl testSimpleList) Get(idx uint64) Value {
 	return tsl[idx]
+}
+
+func (tsl testSimpleList) Insert(idx uint64, vs ...Value) (res testSimpleList) {
+	res = append(res, tsl[:idx]...)
+	res = append(res, vs...)
+	res = append(res, tsl[idx:]...)
+	return
+}
+
+func (tsl testSimpleList) Remove(idx uint64) (res testSimpleList) {
+	res = append(res, tsl[:idx]...)
+	res = append(res, tsl[idx+1:]...)
+	return
 }
 
 func getTestSimpleListLen() int {
@@ -141,6 +155,7 @@ func TestCompoundListAppend(t *testing.T) {
 	assert := assert.New(t)
 
 	cl := compoundFromTestSimpleList(getTestSimpleList())
+	fmt.Println(cl.tupleCount(), "tuples")
 	cl2 := cl.Append(Int64(42))
 	cl3 := cl2.Append(Int64(43))
 	cl4 := cl3.Append(getTestSimpleList()...)
@@ -196,30 +211,106 @@ func TestCompoundListInsertStart(t *testing.T) {
 	assert.Equal(getTestSimpleListLen(), int(cl.Len()))
 	assert.True(compoundFromTestSimpleList(expected).Equals(cl))
 
-	expected = append([]Value{Int64(42)}, expected...)
+	expected = expected.Insert(0, Int64(42))
 	assert.Equal(expected, testSimpleFromCompoundList(cl2))
 	assert.Equal(getTestSimpleListLen()+1, int(cl2.Len()))
 	assert.True(compoundFromTestSimpleList(expected).Equals(cl2))
 
-	expected = append([]Value{Int64(43)}, expected...)
+	expected = expected.Insert(0, Int64(43))
 	assert.Equal(expected, testSimpleFromCompoundList(cl3))
 	assert.Equal(getTestSimpleListLen()+2, int(cl3.Len()))
 	assert.True(compoundFromTestSimpleList(expected).Equals(cl3))
 
-	expected = append(getTestSimpleList(), expected...)
+	expected = expected.Insert(0, getTestSimpleList()...)
 	assert.Equal(expected, testSimpleFromCompoundList(cl4))
 	assert.Equal(2*getTestSimpleListLen()+2, int(cl4.Len()))
 	assert.True(compoundFromTestSimpleList(expected).Equals(cl4))
 
-	expected = append([]Value{Int64(44), Int64(45)}, expected...)
+	expected = expected.Insert(0, Int64(44), Int64(45))
 	assert.Equal(expected, testSimpleFromCompoundList(cl5))
 	assert.Equal(2*getTestSimpleListLen()+4, int(cl5.Len()))
 	assert.True(compoundFromTestSimpleList(expected).Equals(cl5))
 
-	expected = append(getTestSimpleList(), expected...)
+	expected = expected.Insert(0, getTestSimpleList()...)
 	assert.Equal(expected, testSimpleFromCompoundList(cl6))
 	assert.Equal(3*getTestSimpleListLen()+4, int(cl6.Len()))
 	assert.True(compoundFromTestSimpleList(expected).Equals(cl6))
+}
+
+func TestCompoundListInsertMiddle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+	assert := assert.New(t)
+
+	cl := compoundFromTestSimpleList(getTestSimpleList())
+	cl2 := cl.Insert(100, Int64(42))
+	cl3 := cl2.Insert(200, Int64(43))
+	cl4 := cl3.Insert(300, getTestSimpleList()...)
+	cl5 := cl4.Insert(400, Int64(44), Int64(45))
+	cl6 := cl5.Insert(500, getTestSimpleList()...)
+	cl7 := cl6.Insert(600, Int64(100))
+
+	expected := getTestSimpleList()
+	assert.Equal(expected, testSimpleFromCompoundList(cl))
+	assert.Equal(getTestSimpleListLen(), int(cl.Len()))
+	assert.True(compoundFromTestSimpleList(expected).Equals(cl))
+
+	expected = expected.Insert(100, Int64(42))
+	assert.Equal(expected, testSimpleFromCompoundList(cl2))
+	assert.Equal(getTestSimpleListLen()+1, int(cl2.Len()))
+	assert.True(compoundFromTestSimpleList(expected).Equals(cl2))
+
+	expected = expected.Insert(200, Int64(43))
+	assert.Equal(expected, testSimpleFromCompoundList(cl3))
+	assert.Equal(getTestSimpleListLen()+2, int(cl3.Len()))
+	assert.True(compoundFromTestSimpleList(expected).Equals(cl3))
+
+	expected = expected.Insert(300, getTestSimpleList()...)
+	assert.Equal(expected, testSimpleFromCompoundList(cl4))
+	assert.Equal(2*getTestSimpleListLen()+2, int(cl4.Len()))
+	assert.True(compoundFromTestSimpleList(expected).Equals(cl4))
+
+	expected = expected.Insert(400, Int64(44), Int64(45))
+	assert.Equal(expected, testSimpleFromCompoundList(cl5))
+	assert.Equal(2*getTestSimpleListLen()+4, int(cl5.Len()))
+	assert.True(compoundFromTestSimpleList(expected).Equals(cl5))
+
+	expected = expected.Insert(500, getTestSimpleList()...)
+	assert.Equal(expected, testSimpleFromCompoundList(cl6))
+	assert.Equal(3*getTestSimpleListLen()+4, int(cl6.Len()))
+	assert.True(compoundFromTestSimpleList(expected).Equals(cl6))
+
+	expected = expected.Insert(600, Int64(100))
+	assert.Equal(expected, testSimpleFromCompoundList(cl7))
+	assert.Equal(3*getTestSimpleListLen()+5, int(cl7.Len()))
+	assert.True(compoundFromTestSimpleList(expected).Equals(cl7))
+}
+
+func TestCompoundListRemoveMiddle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test in short mode.")
+	}
+	assert := assert.New(t)
+
+	cl := compoundFromTestSimpleList(getTestSimpleList())
+	cl2 := cl.Remove(100)
+	cl3 := cl2.Remove(200)
+
+	expected := getTestSimpleList()
+	assert.Equal(expected, testSimpleFromCompoundList(cl))
+	assert.Equal(getTestSimpleListLen(), int(cl.Len()))
+	assert.True(compoundFromTestSimpleList(expected).Equals(cl))
+
+	expected = expected.Remove(100)
+	assert.Equal(expected, testSimpleFromCompoundList(cl2))
+	assert.Equal(getTestSimpleListLen()-1, int(cl2.Len()))
+	assert.True(compoundFromTestSimpleList(expected).Equals(cl2))
+
+	expected = expected.Remove(200)
+	assert.Equal(expected, testSimpleFromCompoundList(cl3))
+	assert.Equal(getTestSimpleListLen()-2, int(cl3.Len()))
+	assert.True(compoundFromTestSimpleList(expected).Equals(cl3))
 }
 
 // TODO also test somehow the number of opeations (number of items dereferenced?) to make sure we're not just looping over the entire tree after all.

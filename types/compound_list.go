@@ -109,6 +109,14 @@ func (cl compoundList) Insert(idx uint64, vs ...Value) compoundList {
 	return seq.Done().(compoundList)
 }
 
+func (cl compoundList) Remove(idx uint64) compoundList {
+	metaCur, leaf, start := cl.cursorAt(idx)
+	seqCur := newSequenceChunkerCursor(metaCur, listAsSequenceItems(leaf), int(idx-start), readListLeafChunkFn(cl.cs))
+	seq := cl.sequenceChunker(seqCur)
+	seq.Skip()
+	return seq.Done().(compoundList)
+}
+
 func (cl compoundList) sequenceChunker(cur sequenceCursor) *sequenceChunker {
 	return newSequenceChunker(cur, makeListLeafChunkFn(cl.t, cl.cs), newMetaSequenceChunkFn(cl.t, cl.cs), normalizeChunkNoop, normalizeMetaSequenceChunk, normalizeChunkNoop, denormalizeMetaSequenceChunk, newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
 }
