@@ -1,7 +1,6 @@
 package types
 
 import (
-	"fmt"
 	"math/rand"
 	"testing"
 
@@ -155,7 +154,6 @@ func TestCompoundListAppend(t *testing.T) {
 	assert := assert.New(t)
 
 	cl := compoundFromTestSimpleList(getTestSimpleList())
-	fmt.Println(cl.tupleCount(), "tuples")
 	cl2 := cl.Append(Int64(42))
 	cl3 := cl2.Append(Int64(43))
 	cl4 := cl3.Append(getTestSimpleList()...)

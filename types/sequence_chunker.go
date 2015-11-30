@@ -20,7 +20,6 @@ type newBoundaryCheckerFn func() boundaryChecker
 type sequenceChunker struct {
 	cur                        sequenceCursor
 	parent                     *sequenceChunker
-	last                       sequenceItem
 	current, pendingFirst      []sequenceItem
 	makeChunk, parentMakeChunk makeChunkFn
 	nzeChunk, parentNzeChunk   normalizeChunkFn
@@ -54,7 +53,6 @@ func newSequenceChunker(cur sequenceCursor, makeChunk, parentMakeChunk makeChunk
 	seq := &sequenceChunker{
 		cur,
 		nil,
-		nil,
 		[]sequenceItem{}, nil,
 		makeChunk, parentMakeChunk,
 		nzeChunk, parentNzeChunk,
@@ -67,17 +65,13 @@ func newSequenceChunker(cur sequenceCursor, makeChunk, parentMakeChunk makeChunk
 		// Eagerly create a chunker for each level of the existing tree. This is correct while sequences can only ever append, and therefore the tree can only ever grow in height, but generally speaking the tree can also shrink - due to both removals and changes - and in that situation we can't simply create every meta-node that was in the cursor. If we did that, we'd end up with meta-nodes with only a single entry, which is illegal.
 		if cur.getParent() != nil {
 			seq.createParent()
-			// We're starting at the beginning of the chunk (seq.current=... below), so skip on the parent immediately.
-			//seq.parent.Skip() // TODO actually this isn't true anymore because of the way that Skip() is being called for every chunk fragment in doneWithChunk()
 		}
 		// Prime the chunker into the state it would be if all items in the sequence had been appended one at a time.
-		// TODO should this be WindowSize()-1?
-		// TODO I think this needs to be nzeChunk(nil, ...).
-		// TODO Regarding nzeChunk, this might suffer from the problem below: that we may be normalizing across several chunks, and the offsets are reset on every chunk, but normalization will continue to be subtracted. How does this work?
 		for _, item := range nzeChunk(nil, cursorGetMaxNPrevItems(cur, boundaryChk.WindowSize()-1)) {
 			boundaryChk.Write(item)
 		}
 		// Reconstruct this entire chunk.
+		// XXX I think this is wrong, it might cross chunk boundaries, which would have reset when constructing the list, but won't reset here. An appropriate way to fix this would be for cursorGetMaxNPrevItems to return a [][]sequenceItem then for this code to be prevItems := cursorGetMaxNPrevItems(); for i, chunk := range prevItems; seq.current = append(seq.current, nzeChunk(prevItems[i-1][0], chunk)), more or less.
 		seq.current = nzeChunk(nil, cursorGetMaxNPrevItems(cur, cur.indexInChunk()))
 		seq.empty = len(seq.current) == 0
 	}
@@ -118,7 +112,6 @@ func (seq *sequenceChunker) createParent() {
 func (seq *sequenceChunker) commitPendingFirst() {
 	d.Chk.True(seq.pendingFirst != nil)
 	chunk, _ := seq.makeChunk(seq.pendingFirst)
-	seq.last = chunk
 	seq.parent.Append(chunk)
 	seq.pendingFirst = nil
 }
@@ -129,7 +122,6 @@ func (seq *sequenceChunker) handleChunkBoundary() {
 		seq.pendingFirst = seq.current
 	} else {
 		chunk, _ := seq.makeChunk(seq.current)
-		seq.last = chunk
 		seq.parent.Append(chunk)
 	}
 	seq.current = []sequenceItem{}
@@ -137,8 +129,9 @@ func (seq *sequenceChunker) handleChunkBoundary() {
 
 func (seq *sequenceChunker) doneWithChunk() (sequenceItem, Value) {
 	if seq.cur != nil {
-		remainder := cursorGetMaxNNextItems(seq.cur, seq.boundaryChk.WindowSize()-1) // TODO WindowSize()-1 ?
+		remainder := cursorGetMaxNNextItems(seq.cur, seq.boundaryChk.WindowSize()-1)
 		// Carve up the remainder into chunks so that each can be normalized.
+		// TODO this is too complicated... and/or, this should be pulled into the cursor logic, not here, so that it makes sense to test individually.
 		boundaryDetector := seq.cur.clone()
 		var chunks [][]sequenceItem
 		var chunk []sequenceItem

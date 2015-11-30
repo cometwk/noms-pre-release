@@ -75,21 +75,6 @@ func (scc *sequenceChunkerCursor) retreat() bool {
 	return false
 }
 
-func (scc *sequenceChunkerCursor) prevItems(n int) (prev []sequenceItem) {
-	retreater := scc.clone()
-	for i := 0; i < n && retreater.retreat(); i++ {
-		current, ok := retreater.current()
-		d.Chk.True(ok)
-		prev = append(prev, current)
-	}
-	for i := 0; i < len(prev)/2; i++ {
-		t := prev[i]
-		prev[i] = prev[len(prev)-i-1]
-		prev[len(prev)-i-1] = t
-	}
-	return
-}
-
 func (scc *sequenceChunkerCursor) clone() sequenceCursor {
 	var parent sequenceCursor
 	if scc.parent != nil {
@@ -99,6 +84,7 @@ func (scc *sequenceChunkerCursor) clone() sequenceCursor {
 	return &sequenceChunkerCursor{parent, scc.leaf, scc.leafIdx, scc.readChunk}
 }
 
+// XXX make this return a copy, not the actual parent, because giving direct access to the parent - and letting callers mutate it - can cause subtle bugs.
 func (scc *sequenceChunkerCursor) getParent() sequenceCursor {
 	if scc.parent == nil {
 		return nil

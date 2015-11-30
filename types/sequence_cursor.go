@@ -34,6 +34,7 @@ func cursorGetMaxNPrevItems(seq sequenceCursor, n int) []sequenceItem {
 
 // Returns a slice of the next |n| items in |seq|, including the current item in |seq|. Does not
 // TODO "plus last chunk"
+// TODO this would be more useful if it returned a [][]sequenceItem, a list of items in each chunk.
 func cursorGetMaxNNextItems(seq sequenceCursor, n int) []sequenceItem {
 	next := []sequenceItem{}
 	if n == 0 {
