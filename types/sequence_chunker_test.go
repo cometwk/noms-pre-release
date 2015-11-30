@@ -163,7 +163,7 @@ func TestSequenceChunkerPrepend(t *testing.T) {
 
 	testChunking := func(expect []int, from, to int) {
 		newChunker := func(cur sequenceCursor) *sequenceChunker {
-			return newSequenceChunker(cur, makeChunkFromSum, makeChunkFromSum, normalizeChunkNoop, normalizeChunkNoop, normalizeChunkNoop, normalizeChunkNoop, modBoundaryChecker{3}, func() boundaryChecker { return configurableBoundaryChecker{boundaries} })
+			return newSequenceChunker(cur, makeChunkFromSum, makeChunkFromSum, normalizeChunkNoop, normalizeChunkNoop, modBoundaryChecker{3}, func() boundaryChecker { return configurableBoundaryChecker{boundaries} })
 		}
 		seq := newChunker(nil)
 
@@ -182,38 +182,33 @@ func TestSequenceChunkerPrepend(t *testing.T) {
 		// TODO test values are consistent
 	}
 
-	/*
-		// None of [1, 2] is a chunk boundary, so it won't chunk.
-		testChunking([]int{1, 2}, 1, 2)
+	// None of [1, 2] is a chunk boundary, so it won't chunk.
+	testChunking([]int{1, 2}, 1, 2)
 
-		// [3, 4] has a chunk boundary on 3, so it should chunk as [3] [4].
-		testChunking([]int{4, 5}, 3, 4)
+	// [3, 4] has a chunk boundary on 3, so it should chunk as [3] [4].
+	testChunking([]int{4, 5}, 3, 4)
 
-		// [1, 2, 3] ends in a chunk boundary 3, but only a single chunk, so treat is as though it didn't chunk.
-		testChunking([]int{1, 2, 3}, 1, 3)
+	// [1, 2, 3] ends in a chunk boundary 3, but only a single chunk, so treat is as though it didn't chunk.
+	testChunking([]int{1, 2, 3}, 1, 3)
 
-		// [1, 2, 3, 4] has a chunk boundary on 3, so should chunk as [1, 2, 3] [4].
-		testChunking([]int{7, 5}, 1, 4)
+	// [1, 2, 3, 4] has a chunk boundary on 3, so should chunk as [1, 2, 3] [4].
+	testChunking([]int{7, 5}, 1, 4)
 
-		// [1, 2, 3, 4, 5] -> [1, 2, 3] [4, 5] -> [7, 10]
-		testChunking([]int{7, 10}, 1, 5)
+	// [1, 2, 3, 4, 5] -> [1, 2, 3] [4, 5] -> [7, 10]
+	testChunking([]int{7, 10}, 1, 5)
 
-		// [1, 2, 3, 4, 5, 6] -> [1, 2, 3] [4, 5, 6] -> [7, 16]
-		testChunking([]int{7, 16}, 1, 6)
+	// [1, 2, 3, 4, 5, 6] -> [1, 2, 3] [4, 5, 6] -> [7, 16]
+	testChunking([]int{7, 16}, 1, 6)
 
-		// [1, 2, 3, 4, 5, 6, 7] -> [1, 2, 3] [4, 5, 6] [7] -> [7, 16, 8]
-	*/
+	// [1, 2, 3, 4, 5, 6, 7] -> [1, 2, 3] [4, 5, 6] [7] -> [7, 16, 8]
 	testChunking([]int{7, 16, 8}, 1, 7)
 
-	/*
+	// [1, 2, 3, 4, 5, 6, 7] -> [1, 2, 3] [4, 5, 6] [7, 8] -> [7, 16, 16]
+	testChunking([]int{7, 16, 16}, 1, 8)
 
-		// [1, 2, 3, 4, 5, 6, 7] -> [1, 2, 3] [4, 5, 6] [7, 8] -> [7, 16, 16]
-		testChunking([]int{7, 16, 16}, 1, 8)
+	// [1, 2, 3, 4, 5, 6, 7, 8, 9] has a chunk boundary on 3/6/9, so should chunk as [1, 2, 3] [4, 5, 6] [7, 8, 9] which sum+1s as [7, 16, 25] which chunks on the 25. Since the chunk is the last entry, it doesn't actually create a parent chunk.
+	testChunking([]int{7, 16, 25}, 1, 9)
 
-		// [1, 2, 3, 4, 5, 6, 7, 8, 9] has a chunk boundary on 3/6/9, so should chunk as [1, 2, 3] [4, 5, 6] [7, 8, 9] which sum+1s as [7, 16, 25] which chunks on the 25. Since the chunk is the last entry, it doesn't actually create a parent chunk.
-		testChunking([]int{7, 16, 25}, 1, 9)
-
-		// [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] has a chunk boundary on 3/6/9, so should chunk as [1, 2, 3] [4, 5, 6] [7, 8, 9] [10] which sum+1s as [7, 16, 25, 11] which chunks on the 25. This produces chunks of [7, 16, 25] [11] which sum+1s as [49, 12].
-		testChunking([]int{50, 13}, 1, 10)
-	*/
+	// [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] has a chunk boundary on 3/6/9, so should chunk as [1, 2, 3] [4, 5, 6] [7, 8, 9] [10] which sum+1s as [7, 16, 25, 11] which chunks on the 25. This produces chunks of [7, 16, 25] [11] which sum+1s as [49, 12].
+	testChunking([]int{50, 13}, 1, 10)
 }

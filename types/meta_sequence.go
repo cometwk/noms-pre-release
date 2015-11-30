@@ -2,7 +2,6 @@ package types
 
 import (
 	"crypto/sha1"
-	"fmt"
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/attic-labs/buzhash"
 	"github.com/attic-labs/noms/chunks"
@@ -171,22 +170,6 @@ func normalizeMetaSequenceChunk(prev sequenceItem, in []sequenceItem) (out []seq
 		mt := v.(metaTuple)
 		out = append(out, metaTuple{mt.ref, UInt64(mt.uint64Value() - offset)})
 		offset = mt.uint64Value()
-	}
-	return
-}
-
-// TODO "denormalize" sucks.
-func denormalizeMetaSequenceChunk(prev sequenceItem, in []sequenceItem) (out []sequenceItem) {
-	offset := uint64(0)
-	if prev != nil {
-		offset = prev.(metaTuple).uint64Value()
-	}
-	fmt.Println("start offset is", offset)
-	for i, v := range in {
-		mt := v.(metaTuple)
-		offset += mt.uint64Value()
-		fmt.Println(i, "... +", mt.uint64Value(), "=", offset)
-		out = append(out, metaTuple{mt.ref, UInt64(offset)})
 	}
 	return
 }

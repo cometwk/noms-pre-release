@@ -24,7 +24,6 @@ type sequenceChunker struct {
 	current, pendingFirst      []sequenceItem
 	makeChunk, parentMakeChunk makeChunkFn
 	nzeChunk, parentNzeChunk   normalizeChunkFn
-	dnzeChunk, parentDnzeChunk normalizeChunkFn
 	boundaryChk                boundaryChecker
 	newBoundaryChecker         newBoundaryCheckerFn
 	empty                      bool
@@ -41,16 +40,14 @@ func normalizeChunkNoop(prev sequenceItem, values []sequenceItem) []sequenceItem
 }
 
 func newEmptySequenceChunker(makeChunk, parentMakeChunk makeChunkFn, boundaryChk boundaryChecker, newBoundaryChecker newBoundaryCheckerFn) *sequenceChunker {
-	return newSequenceChunker(nil, makeChunk, parentMakeChunk, normalizeChunkNoop, normalizeChunkNoop, normalizeChunkNoop, normalizeChunkNoop, boundaryChk, newBoundaryChecker)
+	return newSequenceChunker(nil, makeChunk, parentMakeChunk, normalizeChunkNoop, normalizeChunkNoop, boundaryChk, newBoundaryChecker)
 }
 
-func newSequenceChunker(cur sequenceCursor, makeChunk, parentMakeChunk makeChunkFn, nzeChunk, parentNzeChunk normalizeChunkFn, dnzeChunk, parentDnzeChunk normalizeChunkFn, boundaryChk boundaryChecker, newBoundaryChecker newBoundaryCheckerFn) *sequenceChunker {
+func newSequenceChunker(cur sequenceCursor, makeChunk, parentMakeChunk makeChunkFn, nzeChunk, parentNzeChunk normalizeChunkFn, boundaryChk boundaryChecker, newBoundaryChecker newBoundaryCheckerFn) *sequenceChunker {
 	d.Chk.NotNil(makeChunk)
 	d.Chk.NotNil(parentMakeChunk)
 	d.Chk.NotNil(nzeChunk)
 	d.Chk.NotNil(parentNzeChunk)
-	d.Chk.NotNil(dnzeChunk)
-	d.Chk.NotNil(parentDnzeChunk)
 	d.Chk.NotNil(boundaryChk)
 	d.Chk.NotNil(newBoundaryChecker)
 
@@ -61,7 +58,6 @@ func newSequenceChunker(cur sequenceCursor, makeChunk, parentMakeChunk makeChunk
 		[]sequenceItem{}, nil,
 		makeChunk, parentMakeChunk,
 		nzeChunk, parentNzeChunk,
-		dnzeChunk, parentDnzeChunk,
 		boundaryChk,
 		newBoundaryChecker,
 		true,
@@ -116,7 +112,7 @@ func (seq *sequenceChunker) createParent() {
 	if seq.cur != nil && seq.cur.getParent() != nil { // getParent() will be nil if seq.cur points to the top of the chunked tree
 		curParent = seq.cur.getParent().clone()
 	}
-	seq.parent = newSequenceChunker(curParent, seq.parentMakeChunk, seq.parentMakeChunk, seq.parentNzeChunk, seq.parentNzeChunk, seq.parentDnzeChunk, seq.parentDnzeChunk, seq.newBoundaryChecker(), seq.newBoundaryChecker)
+	seq.parent = newSequenceChunker(curParent, seq.parentMakeChunk, seq.parentMakeChunk, seq.parentNzeChunk, seq.parentNzeChunk, seq.newBoundaryChecker(), seq.newBoundaryChecker)
 }
 
 func (seq *sequenceChunker) commitPendingFirst() {

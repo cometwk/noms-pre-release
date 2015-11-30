@@ -118,7 +118,7 @@ func (cl compoundList) Remove(idx uint64) compoundList {
 }
 
 func (cl compoundList) sequenceChunker(cur sequenceCursor) *sequenceChunker {
-	return newSequenceChunker(cur, makeListLeafChunkFn(cl.t, cl.cs), newMetaSequenceChunkFn(cl.t, cl.cs), normalizeChunkNoop, normalizeMetaSequenceChunk, normalizeChunkNoop, denormalizeMetaSequenceChunk, newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
+	return newSequenceChunker(cur, makeListLeafChunkFn(cl.t, cl.cs), newMetaSequenceChunkFn(cl.t, cl.cs), normalizeChunkNoop, normalizeMetaSequenceChunk, newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
 }
 
 func (cl compoundList) Iter(f listIterFunc) {
