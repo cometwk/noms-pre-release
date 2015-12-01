@@ -2,7 +2,7 @@ package types
 
 import "github.com/attic-labs/noms/d"
 
-// TODO no need for this to be an interface anymore
+// TODO no need for this to be an interface anymore, sequence_chunker_cursor can be moved in here, and the tests moved to sequence_cursor_test. The helper functions which construct these can be moved to where they're needed (e.g. meta_sequence).
 type sequenceCursor interface {
 	getParent() sequenceCursor
 	clone() sequenceCursor
@@ -18,6 +18,8 @@ type sequenceCursor interface {
 type sequenceCursorItem interface{}
 
 type sequenceChunkerSeekFn func(v, parent sequenceCursorItem) bool
+
+// TODO parent/prev need documenting, and besides, they shouldn't all be sequenceCursorItems since it's really just an arbitrary "reduce" value.
 type seekParentItemFn func(parent, prev, curr sequenceCursorItem) sequenceCursorItem
 
 // Returns a slice of the previous |n| items in |seq|, excluding the current item in |seq|. Does not modify |seq|.

@@ -22,7 +22,7 @@ type getItemFn func(sequenceCursorItem, int) sequenceItem
 // readChunkFn takes an item in the sequence which points to a chunk, and returns the sequence of items in that chunk along with its length.
 type readChunkFn func(sequenceItem) (sequenceCursorItem, int)
 
-func newSequenceChunkerCursor(parent sequenceCursor, leaf sequenceCursorItem, leafIdx, leafLen int, getItem getItemFn, readChunk readChunkFn) sequenceCursor {
+func newSequenceChunkerCursor(parent sequenceCursor, leaf sequenceCursorItem, leafIdx, leafLen int, getItem getItemFn, readChunk readChunkFn) *sequenceChunkerCursor {
 	return &sequenceChunkerCursor{parent, leaf, leafIdx, leafLen, getItem, readChunk}
 }
 
@@ -52,6 +52,10 @@ func (scc *sequenceChunkerCursor) indexInChunk() int {
 func (scc *sequenceChunkerCursor) advance() bool {
 	if scc.leafIdx < scc.leafLen {
 		scc.leafIdx++
+		if scc.parent != nil && scc.leafIdx == 0 {
+			// This advance caused this cursor to step from an invalid state before the start, to a valid state exactly at the start. The parent must be immediately advanced to compensate, because it will point to before the start.
+			scc.parent.advance()
+		}
 		if scc.leafIdx < scc.leafLen {
 			return true
 		}
@@ -69,6 +73,10 @@ func (scc *sequenceChunkerCursor) advance() bool {
 func (scc *sequenceChunkerCursor) retreat() bool {
 	if scc.leafIdx >= 0 {
 		scc.leafIdx--
+		if scc.parent != nil && scc.leafIdx == scc.leafLen-1 {
+			// This retreat caused this cursor to step from an invalid state past the end, to a valid state exactly at the end. The parent must be immediately retreated to compensate, because it will point past the end.
+			scc.parent.retreat()
+		}
 		if scc.leafIdx >= 0 {
 			return true
 		}
@@ -99,7 +107,7 @@ func (scc *sequenceChunkerCursor) getParent() sequenceCursor {
 	return scc.parent
 }
 
-// TODO this needs testing
+// TODO this needs testing.
 func (scc *sequenceChunkerCursor) seek(seekFn sequenceChunkerSeekFn, parentItemFn seekParentItemFn, parentItem sequenceCursorItem) sequenceCursorItem {
 	d.Chk.NotNil(seekFn)
 	d.Chk.NotNil(parentItemFn)
