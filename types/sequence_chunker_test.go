@@ -85,7 +85,7 @@ func makeChunkFromSum(items []sequenceItem) (sequenceItem, Value) {
 	return testSequenceNode{sum + 1, nodes}, listFromInts(ints)
 }
 
-func buildSequenceCursorForTest(node testSequenceNode) (res sequenceCursor) {
+func buildSequenceCursorForTest(node testSequenceNode) (res *sequenceCursor) {
 	for ; node.children != nil; node = node.children[0] {
 		next := newSequenceChunkerCursor(res, node, 0, len(node.children), func(curitem sequenceCursorItem, idx int) sequenceItem {
 			return curitem.(testSequenceNode).children[idx]
@@ -158,7 +158,7 @@ func TestSequenceChunkerPrepend(t *testing.T) {
 	}
 
 	testChunking := func(expect []int, from, to int) {
-		newChunker := func(cur sequenceCursor) *sequenceChunker {
+		newChunker := func(cur *sequenceCursor) *sequenceChunker {
 			return newSequenceChunker(cur, makeChunkFromSum, makeChunkFromSum, normalizeChunkNoop, normalizeChunkNoop, modBoundaryChecker{3}, func() boundaryChecker { return configurableBoundaryChecker{boundaries} })
 		}
 		seq := newChunker(nil)

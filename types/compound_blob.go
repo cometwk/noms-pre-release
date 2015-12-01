@@ -56,7 +56,7 @@ func (cb compoundBlob) Len() uint64 {
 }
 
 type compoundBlobReader struct {
-	cursor                          sequenceCursor
+	cursor                          *sequenceCursor
 	currentReader                   io.ReadSeeker
 	chunkStart, chunkOffset, length uint64
 	cs                              chunks.ChunkSource

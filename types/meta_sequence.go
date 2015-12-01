@@ -173,3 +173,32 @@ func normalizeMetaSequenceChunk(prev sequenceItem, in []sequenceItem) (out []seq
 	}
 	return
 }
+
+// TODO document return type
+func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkSource) (*sequenceCursor, Value) {
+	d.Chk.NotNil(root)
+
+	newCursor := func(parent *sequenceCursor, ms metaSequence) *sequenceCursor {
+		return &sequenceCursor{parent, ms, 0, ms.tupleCount(), func(item sequenceCursorItem, idx int) sequenceItem {
+			return item.(metaSequence).tupleAt(idx)
+		}, func(item sequenceItem) (sequenceCursorItem, int) {
+			ms := ReadValue(item.(metaTuple).ref, cs).(metaSequence)
+			return ms, ms.tupleCount()
+		}}
+	}
+
+	cursors := []*sequenceCursor{newCursor(nil, root)}
+	for {
+		cursor := cursors[len(cursors)-1]
+		mt, ok := cursor.current()
+		d.Chk.True(ok)
+		val := ReadValue(mt.(metaTuple).ref, cs)
+		if ms, ok := val.(metaSequence); ok {
+			cursors = append(cursors, newCursor(cursor, ms))
+		} else {
+			return cursor, val
+		}
+	}
+
+	panic("not reachable")
+}

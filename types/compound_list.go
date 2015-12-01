@@ -48,7 +48,7 @@ func (cl compoundList) Empty() bool {
 	return false
 }
 
-func (cl compoundList) cursorAt(idx uint64) (cursor sequenceCursor, listLeaf List, start uint64) {
+func (cl compoundList) cursorAt(idx uint64) (cursor *sequenceCursor, listLeaf List, start uint64) {
 	d.Chk.True(idx <= cl.Len())
 	cursor, _ = newMetaSequenceCursor(cl, cl.cs)
 
@@ -107,7 +107,7 @@ func (cl compoundList) sequenceChunkerAtIndex(idx uint64) *sequenceChunker {
 func (cl compoundList) Iter(f listIterFunc) {
 	start := uint64(0)
 
-	iterateMetaSequenceLeaf(cl, cl.cs, func(l Value) bool {
+	cl.iterateMetaSequenceLeaf(func(l Value) bool {
 		list := l.(List)
 		for i, v := range list.values {
 			if f(v, start+uint64(i)) {
@@ -123,7 +123,7 @@ func (cl compoundList) Iter(f listIterFunc) {
 func (cl compoundList) IterAll(f listIterAllFunc) {
 	start := uint64(0)
 
-	iterateMetaSequenceLeaf(cl, cl.cs, func(l Value) bool {
+	cl.iterateMetaSequenceLeaf(func(l Value) bool {
 		list := l.(List)
 		for i, v := range list.values {
 			f(v, start+uint64(i))
@@ -131,6 +131,22 @@ func (cl compoundList) IterAll(f listIterAllFunc) {
 		start += list.Len()
 		return false
 	})
+}
+
+// TODO this really would be simpler if IterAll just called Iter and returned false.
+func (cl compoundList) iterateMetaSequenceLeaf(cb func(Value) bool) {
+	cursor, v := newMetaSequenceCursor(cl, cl.cs)
+	for {
+		if cb(v) || !cursor.advance() {
+			return
+		}
+
+		mt, ok := cursor.current()
+		d.Chk.True(ok)
+		v = ReadValue(mt.(metaTuple).ref, cl.cs)
+	}
+
+	panic("not reachable")
 }
 
 func newListLeafBoundaryChecker() boundaryChecker {

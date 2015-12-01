@@ -18,7 +18,7 @@ type boundaryChecker interface {
 type newBoundaryCheckerFn func() boundaryChecker
 
 type sequenceChunker struct {
-	cur                        sequenceCursor
+	cur                        *sequenceCursor
 	parent                     *sequenceChunker
 	current, pendingFirst      []sequenceItem
 	makeChunk, parentMakeChunk makeChunkFn
@@ -42,7 +42,7 @@ func newEmptySequenceChunker(makeChunk, parentMakeChunk makeChunkFn, boundaryChk
 	return newSequenceChunker(nil, makeChunk, parentMakeChunk, normalizeChunkNoop, normalizeChunkNoop, boundaryChk, newBoundaryChecker)
 }
 
-func newSequenceChunker(cur sequenceCursor, makeChunk, parentMakeChunk makeChunkFn, nzeChunk, parentNzeChunk normalizeChunkFn, boundaryChk boundaryChecker, newBoundaryChecker newBoundaryCheckerFn) *sequenceChunker {
+func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChunkFn, nzeChunk, parentNzeChunk normalizeChunkFn, boundaryChk boundaryChecker, newBoundaryChecker newBoundaryCheckerFn) *sequenceChunker {
 	d.Chk.NotNil(makeChunk)
 	d.Chk.NotNil(parentMakeChunk)
 	d.Chk.NotNil(nzeChunk)
@@ -67,12 +67,12 @@ func newSequenceChunker(cur sequenceCursor, makeChunk, parentMakeChunk makeChunk
 			seq.createParent()
 		}
 		// Prime the chunker into the state it would be if all items in the sequence had been appended one at a time.
-		for _, item := range nzeChunk(nil, cursorGetMaxNPrevItems(cur, boundaryChk.WindowSize()-1)) {
+		for _, item := range nzeChunk(nil, cur.maxNPrevItems(boundaryChk.WindowSize()-1)) {
 			boundaryChk.Write(item)
 		}
 		// Reconstruct this entire chunk.
 		// XXX I think this is wrong, it might cross chunk boundaries, which would have reset when constructing the list, but won't reset here. An appropriate way to fix this would be for cursorGetMaxNPrevItems to return a [][]sequenceItem then for this code to be prevItems := cursorGetMaxNPrevItems(); for i, chunk := range prevItems; seq.current = append(seq.current, nzeChunk(prevItems[i-1][0], chunk)), more or less.
-		seq.current = nzeChunk(nil, cursorGetMaxNPrevItems(cur, cur.indexInChunk()))
+		seq.current = nzeChunk(nil, cur.maxNPrevItems(cur.indexInChunk()))
 		seq.empty = len(seq.current) == 0
 	}
 
@@ -102,7 +102,7 @@ func (seq *sequenceChunker) Skip() {
 
 func (seq *sequenceChunker) createParent() {
 	d.Chk.True(seq.parent == nil)
-	var curParent sequenceCursor
+	var curParent *sequenceCursor
 	if seq.cur != nil && seq.cur.getParent() != nil { // getParent() will be nil if seq.cur points to the top of the chunked tree
 		curParent = seq.cur.getParent().clone()
 	}
@@ -129,7 +129,7 @@ func (seq *sequenceChunker) handleChunkBoundary() {
 
 func (seq *sequenceChunker) doneWithChunk() (sequenceItem, Value) {
 	if seq.cur != nil {
-		remainder := cursorGetMaxNNextItems(seq.cur, seq.boundaryChk.WindowSize()-1)
+		remainder := seq.cur.maxNNextItems(seq.boundaryChk.WindowSize() - 1)
 		// Carve up the remainder into chunks so that each can be normalized.
 		// TODO this is too complicated... and/or, this should be pulled into the cursor logic, not here, so that it makes sense to test individually.
 		boundaryDetector := seq.cur.clone()
