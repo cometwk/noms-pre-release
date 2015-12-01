@@ -87,9 +87,9 @@ func makeChunkFromSum(items []sequenceItem) (sequenceItem, Value) {
 
 func buildSequenceCursorForTest(node testSequenceNode) (res *sequenceCursor) {
 	for ; node.children != nil; node = node.children[0] {
-		next := newSequenceChunkerCursor(res, node, 0, len(node.children), func(curitem sequenceCursorItem, idx int) sequenceItem {
-			return curitem.(testSequenceNode).children[idx]
-		}, func(item sequenceItem) (sequenceCursorItem, int) {
+		next := newSequenceCursor(res, node, 0, len(node.children), func(item sequenceItem, idx int) sequenceItem {
+			return item.(testSequenceNode).children[idx]
+		}, func(item sequenceItem) (sequenceItem, int) {
 			chldrn := item.(testSequenceNode).children
 			return chldrn, len(chldrn)
 		})

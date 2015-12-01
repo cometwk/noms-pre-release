@@ -6,34 +6,34 @@ import (
 	"github.com/attic-labs/noms/d"
 )
 
-// sequenceCursor wraps a *sequenceCursor to give it the ability to advance/retreat through individual items.
+// sequenceCursor explores a tree of sequence items.
 type sequenceCursor struct {
 	parent      *sequenceCursor
-	item        sequenceCursorItem
+	item        sequenceItem
 	idx, length int
 	getItem     getItemFn
 	readChunk   readChunkFn
 }
 
-// TODO is there actually any difference between sequenceItem and sequenceCursorItem?
-type sequenceCursorItem interface{}
+// getItemFn takes a parent in the sequence and an index into that parent, and returns the child item, equivalent to `child = parent[idx]`. The parent and the child aren't necessarily the same type.
+type getItemFn func(parent sequenceItem, idx int) (child sequenceItem)
 
-type sequenceChunkerSeekFn func(v, parent sequenceCursorItem) bool
+// readChunkFn takes an item in the sequence which references another sequence of items, and returns that sequence along with its length.
+type readChunkFn func(reference sequenceItem) (sequence sequenceItem, length int)
 
-// TODO parent/prev need documenting, and besides, they shouldn't all be sequenceCursorItems since it's really just an arbitrary "reduce" value.
-type seekParentItemFn func(parent, prev, curr sequenceCursorItem) sequenceCursorItem
-
-// TODO comment
-type getItemFn func(sequenceCursorItem, int) sequenceItem
-
-// readChunkFn takes an item in the sequence which points to a chunk, and returns the sequence of items in that chunk along with its length.
-type readChunkFn func(sequenceItem) (sequenceCursorItem, int)
-
-func newSequenceChunkerCursor(parent *sequenceCursor, item sequenceCursorItem, idx, length int, getItem getItemFn, readChunk readChunkFn) *sequenceCursor {
+func newSequenceCursor(parent *sequenceCursor, item sequenceItem, idx, length int, getItem getItemFn, readChunk readChunkFn) *sequenceCursor {
 	return &sequenceCursor{parent, item, idx, length, getItem, readChunk}
 }
 
-func (cur *sequenceCursor) current() (sequenceItem, bool) {
+// Returns the value the cursor refers to. Fails an assertion if the cursor doesn't point to a value.
+func (cur *sequenceCursor) current() sequenceItem {
+	item, ok := cur.maybeCurrent()
+	d.Chk.True(ok)
+	return item
+}
+
+// Returns the value the cursor refers to, if any. If the cursor doesn't point to a value, returns (nil, false).
+func (cur *sequenceCursor) maybeCurrent() (sequenceItem, bool) {
 	switch {
 	case cur.idx < -1 || cur.idx > cur.length:
 		panic("illegal")
@@ -41,14 +41,6 @@ func (cur *sequenceCursor) current() (sequenceItem, bool) {
 		return nil, false
 	default:
 		return cur.getItem(cur.item, cur.idx), true
-	}
-}
-
-func (cur *sequenceCursor) prevInChunk() (sequenceItem, bool) {
-	if cur.idx > 0 {
-		return cur.getItem(cur.item, cur.idx-1), true
-	} else {
-		return nil, false
 	}
 }
 
@@ -68,9 +60,7 @@ func (cur *sequenceCursor) advance() bool {
 		}
 	}
 	if cur.parent != nil && cur.parent.advance() {
-		current, ok := cur.parent.current()
-		d.Chk.True(ok)
-		cur.item, cur.length = cur.readChunk(current)
+		cur.item, cur.length = cur.readChunk(cur.parent.current())
 		cur.idx = 0
 		return true
 	}
@@ -89,9 +79,7 @@ func (cur *sequenceCursor) retreat() bool {
 		}
 	}
 	if cur.parent != nil && cur.parent.retreat() {
-		current, ok := cur.parent.current()
-		d.Chk.True(ok)
-		cur.item, cur.length = cur.readChunk(current)
+		cur.item, cur.length = cur.readChunk(cur.parent.current())
 		cur.idx = cur.length - 1
 		return true
 	}
@@ -106,40 +94,34 @@ func (cur *sequenceCursor) clone() *sequenceCursor {
 	return &sequenceCursor{parent, cur.item, cur.idx, cur.length, cur.getItem, cur.readChunk}
 }
 
-// XXX make this return a copy, not the actual parent, because giving direct access to the parent - and letting callers mutate it - can cause subtle bugs.
-func (cur *sequenceCursor) getParent() *sequenceCursor {
-	if cur.parent == nil {
-		return nil
-	}
-	return cur.parent
-}
+type sequenceCursorSeekCompareFn func(carry interface{}, item sequenceItem) bool
 
-// TODO this needs testing.
-func (cur *sequenceCursor) seek(seekFn sequenceChunkerSeekFn, parentItemFn seekParentItemFn, parentItem sequenceCursorItem) sequenceCursorItem {
-	d.Chk.NotNil(seekFn)
-	d.Chk.NotNil(parentItemFn)
+type sequenceCursorSeekStepFn func(carry interface{}, prev, current sequenceItem) interface{}
+
+// Seeks the cursor to the first position in the sequence where |compare| returns true. During seeking, the caller can build up an arbitrary carry value, passed to |compare| and |step|. The carry value is initialized as |carry|, but will be replaced with the return value of |step|.
+func (cur *sequenceCursor) seek(compare sequenceCursorSeekCompareFn, step sequenceCursorSeekStepFn, carry interface{}) interface{} {
+	d.Chk.NotNil(compare)
+	d.Chk.NotNil(step)
 
 	if cur.parent != nil {
-		parentItem = cur.parent.seek(seekFn, parentItemFn, parentItem)
-		current, ok := cur.parent.current()
-		d.Chk.True(ok)
-		cur.item, cur.length = cur.readChunk(current)
+		carry = cur.parent.seek(compare, step, carry)
+		cur.item, cur.length = cur.readChunk(cur.parent.current())
 	}
 
 	cur.idx = sort.Search(cur.length, func(i int) bool {
-		return seekFn(cur.getItem(cur.item, i), parentItem)
+		return compare(carry, cur.getItem(cur.item, i))
 	})
 
 	if cur.idx == cur.length {
 		cur.idx = cur.length - 1
 	}
 
-	var prev sequenceCursorItem
+	var prev sequenceItem
 	if cur.idx > 0 {
 		prev = cur.getItem(cur.item, cur.idx-1)
 	}
 
-	return parentItemFn(parentItem, prev, cur.getItem(cur.item, cur.idx))
+	return step(carry, prev, cur.getItem(cur.item, cur.idx))
 }
 
 // Returns a slice of the previous |n| items in |cur|, excluding the current item in |cur|. Does not modify |cur|.
@@ -148,9 +130,7 @@ func (cur *sequenceCursor) maxNPrevItems(n int) []sequenceItem {
 
 	retreater := cur.clone()
 	for i := 0; i < n && retreater.retreat(); i++ {
-		current, ok := retreater.current()
-		d.Chk.True(ok)
-		prev = append(prev, current)
+		prev = append(prev, retreater.current())
 	}
 
 	for i := 0; i < len(prev)/2; i++ {
@@ -171,12 +151,10 @@ func (cur *sequenceCursor) maxNNextItems(n int) []sequenceItem {
 		return next
 	}
 
-	{
-		current, ok := cur.current()
-		if !ok {
-			return next
-		}
+	if current, ok := cur.maybeCurrent(); ok {
 		next = append(next, current)
+	} else {
+		return next
 	}
 
 	advancer := cur.clone()
@@ -184,15 +162,11 @@ func (cur *sequenceCursor) maxNNextItems(n int) []sequenceItem {
 		if !advancer.advance() {
 			return next
 		}
-		current, ok := advancer.current()
-		d.Chk.True(ok)
-		next = append(next, current)
+		next = append(next, advancer.current())
 	}
 
 	for advancer.advance() && advancer.indexInChunk() > 0 {
-		current, ok := advancer.current()
-		d.Chk.True(ok)
-		next = append(next, current)
+		next = append(next, advancer.current())
 	}
 
 	return next

@@ -63,7 +63,7 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 
 	if cur != nil {
 		// Eagerly create a chunker for each level of the existing tree. This is correct while sequences can only ever append, and therefore the tree can only ever grow in height, but generally speaking the tree can also shrink - due to both removals and changes - and in that situation we can't simply create every meta-node that was in the cursor. If we did that, we'd end up with meta-nodes with only a single entry, which is illegal.
-		if cur.getParent() != nil {
+		if cur.parent != nil {
 			seq.createParent()
 		}
 		// Prime the chunker into the state it would be if all items in the sequence had been appended one at a time.
@@ -102,11 +102,11 @@ func (seq *sequenceChunker) Skip() {
 
 func (seq *sequenceChunker) createParent() {
 	d.Chk.True(seq.parent == nil)
-	var curParent *sequenceCursor
-	if seq.cur != nil && seq.cur.getParent() != nil { // getParent() will be nil if seq.cur points to the top of the chunked tree
-		curParent = seq.cur.getParent().clone()
+	var parent *sequenceCursor
+	if seq.cur != nil && seq.cur.parent != nil { // seq.cur.parent will be nil if seq.cur points to the top of the chunked tree
+		parent = seq.cur.parent.clone()
 	}
-	seq.parent = newSequenceChunker(curParent, seq.parentMakeChunk, seq.parentMakeChunk, seq.parentNzeChunk, seq.parentNzeChunk, seq.newBoundaryChecker(), seq.newBoundaryChecker)
+	seq.parent = newSequenceChunker(parent, seq.parentMakeChunk, seq.parentMakeChunk, seq.parentNzeChunk, seq.parentNzeChunk, seq.newBoundaryChecker(), seq.newBoundaryChecker)
 }
 
 func (seq *sequenceChunker) commitPendingFirst() {
@@ -135,7 +135,12 @@ func (seq *sequenceChunker) doneWithChunk() (sequenceItem, Value) {
 		boundaryDetector := seq.cur.clone()
 		var chunks [][]sequenceItem
 		var chunk []sequenceItem
-		prev, _ := seq.cur.prevInChunk() // |prev| can be nil, but that's ok
+		var prev sequenceItem
+		if seq.cur.indexInChunk() > 0 {
+			curToPrev := seq.cur.clone()
+			d.Chk.True(curToPrev.retreat())
+			prev = curToPrev.current()
+		}
 		for _, n := range remainder {
 			if chunk != nil && boundaryDetector.indexInChunk() == 0 {
 				chunks = append(chunks, seq.nzeChunk(prev, chunk))

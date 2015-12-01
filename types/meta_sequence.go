@@ -179,9 +179,9 @@ func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkSource) (*sequenceC
 	d.Chk.NotNil(root)
 
 	newCursor := func(parent *sequenceCursor, ms metaSequence) *sequenceCursor {
-		return &sequenceCursor{parent, ms, 0, ms.tupleCount(), func(item sequenceCursorItem, idx int) sequenceItem {
+		return &sequenceCursor{parent, ms, 0, ms.tupleCount(), func(item sequenceItem, idx int) sequenceItem {
 			return item.(metaSequence).tupleAt(idx)
-		}, func(item sequenceItem) (sequenceCursorItem, int) {
+		}, func(item sequenceItem) (sequenceItem, int) {
 			ms := ReadValue(item.(metaTuple).ref, cs).(metaSequence)
 			return ms, ms.tupleCount()
 		}}
@@ -190,9 +190,7 @@ func newMetaSequenceCursor(root metaSequence, cs chunks.ChunkSource) (*sequenceC
 	cursors := []*sequenceCursor{newCursor(nil, root)}
 	for {
 		cursor := cursors[len(cursors)-1]
-		mt, ok := cursor.current()
-		d.Chk.True(ok)
-		val := ReadValue(mt.(metaTuple).ref, cs)
+		val := ReadValue(cursor.current().(metaTuple).ref, cs)
 		if ms, ok := val.(metaSequence); ok {
 			cursors = append(cursors, newCursor(cursor, ms))
 		} else {

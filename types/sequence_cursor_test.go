@@ -7,14 +7,14 @@ import (
 )
 
 func newTestSequenceCursor(items [][]int) *sequenceCursor {
-	parent := newSequenceChunkerCursor(nil, items, 0, len(items), func(item sequenceCursorItem, idx int) sequenceItem {
+	parent := newSequenceCursor(nil, items, 0, len(items), func(item sequenceItem, idx int) sequenceItem {
 		return item.([][]int)[idx] // item should be == items
-	}, func(item sequenceItem) (sequenceCursorItem, int) {
+	}, func(item sequenceItem) (sequenceItem, int) {
 		panic("not reachable")
 	})
-	return newSequenceChunkerCursor(parent, items[0], 0, len(items[0]), func(item sequenceCursorItem, idx int) sequenceItem {
+	return newSequenceCursor(parent, items[0], 0, len(items[0]), func(item sequenceItem, idx int) sequenceItem {
 		return item.([]int)[idx]
-	}, func(item sequenceItem) (sequenceCursorItem, int) {
+	}, func(item sequenceItem) (sequenceItem, int) {
 		return item, len(item.([]int))
 	})
 }
@@ -28,7 +28,7 @@ func TestTestCursor(t *testing.T) {
 	}
 	expect := func(expectIdx int, expectOk bool, expectVal sequenceItem) {
 		assert.Equal(expectIdx, cur.indexInChunk())
-		val, ok := cur.current()
+		val, ok := cur.maybeCurrent()
 		assert.Equal(expectOk, ok)
 		assert.Equal(expectVal, val)
 	}
@@ -309,4 +309,65 @@ func TestCursorGetMaxNNextItemsWithMultiItemSequence(t *testing.T) {
 	assert.Equal([]sequenceItem{}, cur.maxNNextItems(0))
 	assert.Equal([]sequenceItem{}, cur.maxNNextItems(1))
 	assert.Equal(4, cur.idx)
+}
+
+func TestCursorSeek(t *testing.T) {
+	assert := assert.New(t)
+	var cur *sequenceCursor
+
+	reset := func() {
+		cur = newTestSequenceCursor([][]int{
+			[]int{100, 101, 102, 103},
+			[]int{104, 105, 106, 107},
+		})
+	}
+
+	assertSeeksTo := func(expected sequenceItem, seekTo int) {
+		// The value being carried around here is the level of the tree being seeked in. The seek is initialized with 0, so carry value passed to the comparison function on the first level should be 0. Subsequent steps increment this number, so 1 should be passed into the comparison function for the second level. When the seek exits, the final step should increment it again, so the result should be 2.
+		result := cur.seek(func(carry interface{}, val sequenceItem) bool {
+			switch val := val.(type) {
+			case []int:
+				assert.Equal(0, carry)
+				return val[len(val)-1] >= seekTo
+			case int:
+				assert.Equal(1, carry)
+				return val >= seekTo
+			default:
+				panic("illegal")
+			}
+		}, func(carry interface{}, prev, current sequenceItem) interface{} {
+			switch current.(type) {
+			case []int:
+				assert.Equal(0, carry)
+			case int:
+				assert.Equal(1, carry)
+			}
+			return carry.(int) + 1
+		}, 0)
+		assert.Equal(2, result)
+		assert.Equal(expected, cur.current())
+	}
+
+	// Test seeking immediately to values on cursor construction.
+	reset()
+	assertSeeksTo(sequenceItem(100), 99)
+	for i := 100; i <= 107; i++ {
+		reset()
+		assertSeeksTo(sequenceItem(i), i)
+	}
+	reset()
+	assertSeeksTo(sequenceItem(107), 108)
+
+	// Test reusing an existing cursor to seek all over the place.
+	reset()
+	assertSeeksTo(sequenceItem(100), 99)
+	for i := 100; i <= 107; i++ {
+		assertSeeksTo(sequenceItem(i), i)
+	}
+	assertSeeksTo(sequenceItem(107), 108)
+	assertSeeksTo(sequenceItem(100), 99)
+	for i := 100; i <= 107; i++ {
+		assertSeeksTo(sequenceItem(i), i)
+	}
+	assertSeeksTo(sequenceItem(107), 108)
 }

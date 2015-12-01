@@ -6,7 +6,6 @@ import (
 
 	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/d"
 )
 
 type testSimpleList []Value
@@ -132,9 +131,7 @@ func TestCompoundListCurAt(t *testing.T) {
 		cl := NewCompoundList(tr, cs, getTestSimpleList()...).(compoundList)
 		cur, _, _ := cl.cursorAt(uint64(at))
 		for {
-			mt, ok := cur.current()
-			d.Chk.True(ok)
-			size += int(ReadValue(mt.(metaTuple).ref, cs).(List).Len())
+			size += int(ReadValue(cur.current().(metaTuple).ref, cs).(List).Len())
 			if !next(cur) {
 				return
 			}
