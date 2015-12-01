@@ -56,7 +56,7 @@ func (cb compoundBlob) Len() uint64 {
 }
 
 type compoundBlobReader struct {
-	cursor                          *metaSequenceCursor
+	cursor                          sequenceCursor
 	currentReader                   io.ReadSeeker
 	chunkStart, chunkOffset, length uint64
 	cs                              chunks.ChunkSource
@@ -106,15 +106,17 @@ func (cbr *compoundBlobReader) Seek(offset int64, whence int) (int64, error) {
 
 	seekAbs := uint64(abs)
 
-	chunkStart := cbr.cursor.seek(func(v, parent Value) bool {
+	chunkStart := cbr.cursor.seek(func(v, parent sequenceCursorItem) bool {
 		d.Chk.NotNil(v)
 		d.Chk.NotNil(parent)
 
-		return seekAbs < uint64(parent.(UInt64))+uint64(v.(UInt64))
-	}, func(parent, prev, current Value) Value {
+		// TODO the way that parent is a UInt64 and v is a metaTuple is confusing largely because they're both sequenceCursorItems?
+		return seekAbs < uint64(parent.(UInt64))+uint64(v.(metaTuple).value.(UInt64))
+	}, func(parent, prev, current sequenceCursorItem) sequenceCursorItem {
+		// TODO the way that parent is a UInt64 and prev is a metaTuple is confusing largely because they're both sequenceCursorItems?
 		pv := uint64(0)
 		if prev != nil {
-			pv = uint64(prev.(UInt64))
+			pv = uint64(prev.(metaTuple).value.(UInt64))
 		}
 
 		return UInt64(uint64(parent.(UInt64)) + pv)
@@ -127,6 +129,8 @@ func (cbr *compoundBlobReader) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (cbr *compoundBlobReader) updateReader() {
-	cbr.currentReader = cbr.cursor.currentVal().(blobLeaf).Reader()
+	mt, ok := cbr.cursor.current()
+	d.Chk.True(ok)
+	cbr.currentReader = ReadValue(mt.(metaTuple).ref, cbr.cs).(blobLeaf).Reader()
 	cbr.currentReader.Seek(int64(cbr.chunkOffset), 0)
 }

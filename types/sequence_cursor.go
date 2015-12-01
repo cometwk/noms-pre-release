@@ -2,6 +2,7 @@ package types
 
 import "github.com/attic-labs/noms/d"
 
+// TODO no need for this to be an interface anymore
 type sequenceCursor interface {
 	getParent() sequenceCursor
 	clone() sequenceCursor
@@ -10,7 +11,14 @@ type sequenceCursor interface {
 	advance() bool
 	retreat() bool
 	indexInChunk() int
+	seek(sequenceChunkerSeekFn, seekParentItemFn, sequenceCursorItem) sequenceCursorItem
 }
+
+// TODO is there actually any difference between sequenceItem and sequenceCursorItem?
+type sequenceCursorItem interface{}
+
+type sequenceChunkerSeekFn func(v, parent sequenceCursorItem) bool
+type seekParentItemFn func(parent, prev, curr sequenceCursorItem) sequenceCursorItem
 
 // Returns a slice of the previous |n| items in |seq|, excluding the current item in |seq|. Does not modify |seq|.
 func cursorGetMaxNPrevItems(seq sequenceCursor, n int) []sequenceItem {

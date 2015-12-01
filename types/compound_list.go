@@ -27,14 +27,6 @@ func getListSequenceData(v Value) metaSequenceData {
 	return v.(compoundList).tuples
 }
 
-func listAsSequenceItems(ls List) []sequenceItem {
-	items := make([]sequenceItem, len(ls.values))
-	for i, v := range ls.values {
-		items[i] = v
-	}
-	return items
-}
-
 func init() {
 	registerMetaValue(ListKind, buildCompoundList, getListSequenceData)
 }
@@ -56,29 +48,29 @@ func (cl compoundList) Empty() bool {
 	return false
 }
 
-func (cl compoundList) cursorAt(idx uint64) (cursor *metaSequenceCursor, listLeaf List, start uint64) {
+func (cl compoundList) cursorAt(idx uint64) (cursor sequenceCursor, listLeaf List, start uint64) {
 	d.Chk.True(idx <= cl.Len())
-	cursor, leaf := newMetaSequenceCursor(cl, cl.cs)
+	cursor, _ = newMetaSequenceCursor(cl, cl.cs)
 
-	chunkStart := cursor.seek(func(v, parent Value) bool {
+	chunkStart := cursor.seek(func(v, parent sequenceCursorItem) bool {
 		d.Chk.NotNil(v)
 		d.Chk.NotNil(parent)
 
-		return idx < uint64(parent.(UInt64))+uint64(v.(UInt64))
-	}, func(parent, prev, current Value) Value {
+		// TODO the way that parent is a UInt64 and v is a metaTuple is confusing largely because they're both sequenceCursorItems?
+		return idx < uint64(parent.(UInt64))+uint64(v.(metaTuple).value.(UInt64))
+	}, func(parent, prev, current sequenceCursorItem) sequenceCursorItem {
+		// TODO the way that parent is a UInt64 and prev is a metaTuple is confusing largely because they're both sequenceCursorItems?
 		pv := uint64(0)
 		if prev != nil {
-			pv = uint64(prev.(UInt64))
+			pv = uint64(prev.(metaTuple).value.(UInt64))
 		}
 
 		return UInt64(uint64(parent.(UInt64)) + pv)
 	}, UInt64(0))
 
-	if cursor.currentRef() != leaf.Ref() {
-		leaf = cursor.currentVal()
-	}
-
-	listLeaf = leaf.(List)
+	mt, ok := cursor.current()
+	d.Chk.True(ok)
+	listLeaf = ReadValue(mt.(metaTuple).ref, cl.cs).(List)
 	start = uint64(chunkStart.(UInt64))
 	return
 }
@@ -108,7 +100,7 @@ func (cl compoundList) Remove(idx uint64) compoundList {
 
 func (cl compoundList) sequenceChunkerAtIndex(idx uint64) *sequenceChunker {
 	metaCur, leaf, start := cl.cursorAt(idx)
-	seqCur := newSequenceChunkerCursor(metaCur, listAsSequenceItems(leaf), int(idx-start), readListLeafChunkFn(cl.cs))
+	seqCur := newSequenceChunkerCursor(metaCur, leaf, int(idx-start), len(leaf.values), getSequenceItemFromList, readListLeafChunkFn(cl.cs))
 	return newSequenceChunker(seqCur, makeListLeafChunkFn(cl.t, cl.cs), newMetaSequenceChunkFn(cl.t, cl.cs), normalizeChunkNoop, normalizeMetaSequenceChunk, newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
 }
 
@@ -165,10 +157,15 @@ func makeListLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 	}
 }
 
+func getSequenceItemFromList(curitem sequenceCursorItem, idx int) sequenceItem {
+	return curitem.(List).values[idx]
+}
+
 func readListLeafChunkFn(cs chunks.ChunkStore) readChunkFn {
-	return func(item sequenceItem) []sequenceItem {
+	return func(item sequenceItem) (sequenceCursorItem, int) {
 		mt := item.(metaTuple)
-		return listAsSequenceItems(ReadValue(mt.ref, cs).(List))
+		list := ReadValue(mt.ref, cs).(List)
+		return list, len(list.values)
 	}
 }
 
