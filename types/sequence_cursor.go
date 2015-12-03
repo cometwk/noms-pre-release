@@ -124,30 +124,61 @@ func (cur *sequenceCursor) seek(compare sequenceCursorSeekCompareFn, step sequen
 	return step(carry, prev, cur.getItem(cur.item, cur.idx))
 }
 
+// TODO: This comment is wrong.
 // Returns a slice of the previous |n| items in |cur|, excluding the current item in |cur|. Does not modify |cur|.
-func (cur *sequenceCursor) maxNPrevItems(n int) []sequenceItem {
-	prev := []sequenceItem{}
+func (cur *sequenceCursor) maxNPrevItems(n int) (sequenceItem, [][]sequenceItem) {
+	chunks := [][]sequenceItem{}
+	working := []sequenceItem{}
+
+	liftWorking := func() {
+		if len(working) > 0 {
+			for i := 0; i < len(working)/2; i++ {
+				t := working[i]
+				working[i] = working[len(working)-i-1]
+				working[len(working)-i-1] = t
+			}
+			chunks = append(chunks, working)
+			working = []sequenceItem{}
+		}
+	}
 
 	retreater := cur.clone()
 	for i := 0; i < n && retreater.retreat(); i++ {
-		prev = append(prev, retreater.current())
+		working = append(working, retreater.current())
+		if retreater.indexInChunk() == 0 {
+			liftWorking()
+		}
 	}
 
-	for i := 0; i < len(prev)/2; i++ {
-		t := prev[i]
-		prev[i] = prev[len(prev)-i-1]
-		prev[len(prev)-i-1] = t
+	var prevInChunk sequenceItem
+	if retreater.indexInChunk() > 0 && retreater.retreat() {
+		prevInChunk = retreater.current()
 	}
 
-	return prev
+	liftWorking()
+
+	for i := 0; i < len(chunks)/2; i++ {
+		t := chunks[i]
+		chunks[i] = chunks[len(chunks)-i-1]
+		chunks[len(chunks)-i-1] = t
+	}
+
+	return prevInChunk, chunks
 }
 
-// TODO this comment is wrong
+// TODO: This comment is wrong, and this comment/name should incorporate "with at least the last chunk".
 // Returns a slice of the next |n| items in |cur|, including the current item in |cur|. Does not modify |cur|.
-// TODO "plus last chunk" or maybe "at least..."
-func (cur *sequenceCursor) maxNNextItems(n int) [][]sequenceItem {
+func (cur *sequenceCursor) maxNNextItems(n int) (sequenceItem, [][]sequenceItem) {
 	chunks := [][]sequenceItem{}
 	working := []sequenceItem{}
+
+	// TODO go back to a prevInChunk() method? use that everywhere with nzeChunk, clearer than assuming nil, though I could assert that. Or maybe maxNNextItems should return the previous item in the chunk as well.
+	var prevInChunk sequenceItem
+	if cur.indexInChunk() > 0 {
+		curToPrev := cur.clone()
+		d.Chk.True(curToPrev.retreat())
+		prevInChunk = curToPrev.current()
+	}
 
 	liftWorking := func() {
 		if len(working) > 0 {
@@ -159,14 +190,15 @@ func (cur *sequenceCursor) maxNNextItems(n int) [][]sequenceItem {
 	if current, ok := cur.maybeCurrent(); ok {
 		working = append(working, current)
 	} else {
-		return chunks
+		// TODO: What about the case that the cursor is at position -1? This will return an empty list, but arguably it should return the full first chunk. Unclear.
+		return prevInChunk, chunks
 	}
 
 	advancer := cur.clone()
 	for i := 1; i < n; i++ {
 		if !advancer.advance() {
 			liftWorking()
-			return chunks
+			return prevInChunk, chunks
 		}
 		if advancer.indexInChunk() == 0 {
 			liftWorking()
@@ -179,36 +211,5 @@ func (cur *sequenceCursor) maxNNextItems(n int) [][]sequenceItem {
 	}
 	liftWorking()
 
-	return chunks
-}
-
-// Returns a slice of the next |n| items in |seq|, including the current item in |seq|. Does not
-// TODO "plus last chunk"
-func cursorGetMaxNNextItems2(seq *sequenceCursor, n int) []sequenceItem {
-	next := []sequenceItem{}
-	if n == 0 {
-		return next
-	}
-
-	{
-		current, ok := seq.maybeCurrent()
-		if !ok {
-			return next
-		}
-		next = append(next, current)
-	}
-
-	advancer := seq.clone()
-	for i := 1; i < n; i++ {
-		if !advancer.advance() {
-			return next
-		}
-		next = append(next, advancer.current())
-	}
-
-	for advancer.advance() && advancer.indexInChunk() > 0 {
-		next = append(next, advancer.current())
-	}
-
-	return next
+	return prevInChunk, chunks
 }

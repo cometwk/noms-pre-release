@@ -66,13 +66,21 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 			seq.createParent()
 		}
 		// Prime the chunker into the state it would be if all items in the sequence had been appended one at a time.
-		// XXX I think this is wrong, it might cross chunk boundaries, which would have reset when constructing the list, but won't reset here. An appropriate way to fix this would be for cursorGetMaxNPrevItems to return a [][]sequenceItem then for this code to be prevItems := cursorGetMaxNPrevItems(); for i, chunk := range prevItems; seq.current = append(seq.current, nzeChunk(prevItems[i-1][0], chunk)), more or less.
-		for _, item := range nzeChunk(nil, cur.maxNPrevItems(boundaryChk.WindowSize()-1)) { // TODO I don't think this should be nil
-			boundaryChk.Write(item)
+		// TODO: Write a test to prove that this is necessary.
+		prevInChunk, prevChunks := cur.maxNPrevItems(boundaryChk.WindowSize() - 1)
+		for _, chunk := range prevChunks {
+			for _, item := range nzeChunk(prevInChunk, chunk) {
+				boundaryChk.Write(item)
+			}
+			prevInChunk = nil
 		}
 		// Reconstruct this entire chunk. The previous value is nil because this is the start of the chunk.
-		seq.current = nzeChunk(nil, cur.maxNPrevItems(cur.indexInChunk()))
-		seq.empty = len(seq.current) == 0
+		_, prevChunks = cur.maxNPrevItems(cur.indexInChunk())
+		if len(prevChunks) > 0 {
+			d.Chk.Equal(1, len(prevChunks))
+			seq.current = nzeChunk(nil, prevChunks[0])
+			seq.empty = false
+		}
 	}
 
 	return seq
@@ -130,60 +138,17 @@ func (seq *sequenceChunker) handleChunkBoundary() {
 
 func (seq *sequenceChunker) doneWithChunk() (sequenceItem, Value) {
 	if seq.cur != nil {
-		// TODO go back to a prevInChunk() method? use that everywhere with nzeChunk, clearer than assuming nil, though I could assert that. Or maybe maxNNextItems should return the previous item in the chunk as well.
-		var prev sequenceItem
-		if seq.cur.indexInChunk() > 0 {
-			curToPrev := seq.cur.clone()
-			d.Chk.True(curToPrev.retreat())
-			prev = curToPrev.current()
-		}
-		for i, chunk := range seq.cur.maxNNextItems(seq.boundaryChk.WindowSize() - 1) {
+		prevInChunk, nextChunks := seq.cur.maxNNextItems(seq.boundaryChk.WindowSize() - 1)
+		for i, chunk := range nextChunks {
 			// Don't Skip while pushing up the first chunk, it was already skipped in createParent().
 			if i > 0 && seq.parent != nil {
 				seq.parent.Skip()
 			}
-			for _, v := range seq.nzeChunk(prev, chunk) {
+			for _, v := range seq.nzeChunk(prevInChunk, chunk) {
 				seq.Append(v)
 			}
-			prev = nil
+			prevInChunk = nil
 		}
-
-		/*
-			remainder := cursorGetMaxNNextItems2(seq.cur, seq.boundaryChk.WindowSize()) // TODO WindowSize()-1 ?
-			// Carve up the remainder into chunks so that each can be normalized.
-			boundaryDetector := seq.cur.clone()
-			var chunks [][]sequenceItem
-			var chunk []sequenceItem
-
-			//prev, _ := seq.cur.prevInChunk() // |prev| can be nil, but that's ok
-			var prev sequenceItem
-			if seq.cur.indexInChunk() > 0 {
-				curToPrev := seq.cur.clone()
-				d.Chk.True(curToPrev.retreat())
-				prev = curToPrev.current()
-			}
-
-			for _, n := range remainder {
-				if chunk != nil && boundaryDetector.indexInChunk() == 0 {
-					chunks = append(chunks, seq.nzeChunk(prev, chunk))
-					chunk = nil
-					prev = nil
-				}
-				chunk = append(chunk, n)
-				boundaryDetector.advance()
-			}
-			chunks = append(chunks, seq.nzeChunk(prev, chunk))
-			// and now we chunk.
-			for _, chunk := range chunks {
-				if seq.parent != nil {
-					seq.parent.Skip()
-				}
-				for _, n := range chunk {
-					seq.Append(n)
-				}
-			}
-		*/
-
 	}
 	if seq.pendingFirst != nil {
 		d.Chk.True(seq.parent == nil)
