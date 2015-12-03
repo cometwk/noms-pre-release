@@ -181,3 +181,34 @@ func (cur *sequenceCursor) maxNNextItems(n int) [][]sequenceItem {
 
 	return chunks
 }
+
+// Returns a slice of the next |n| items in |seq|, including the current item in |seq|. Does not
+// TODO "plus last chunk"
+func cursorGetMaxNNextItems2(seq *sequenceCursor, n int) []sequenceItem {
+	next := []sequenceItem{}
+	if n == 0 {
+		return next
+	}
+
+	{
+		current, ok := seq.maybeCurrent()
+		if !ok {
+			return next
+		}
+		next = append(next, current)
+	}
+
+	advancer := seq.clone()
+	for i := 1; i < n; i++ {
+		if !advancer.advance() {
+			return next
+		}
+		next = append(next, advancer.current())
+	}
+
+	for advancer.advance() && advancer.indexInChunk() > 0 {
+		next = append(next, advancer.current())
+	}
+
+	return next
+}

@@ -3,7 +3,6 @@ package types
 import (
 	"crypto/sha1"
 
-	"github.com/attic-labs/noms/Godeps/_workspace/src/github.com/attic-labs/buzhash"
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
@@ -157,13 +156,10 @@ func (cl compoundList) iterateMetaSequenceLeaf(cb func(Value) bool) {
 }
 
 func newListLeafBoundaryChecker() boundaryChecker {
-	// TODO: solve the mystery of why the boundary checking isn't idempotent.
-	return newBuzHashBoundaryChecker(listWindowSize, sha1.Size, func(h *buzhash.BuzHash, item sequenceItem) bool {
+	// TODO: solve the mystery of why the boundary checking isn't idempotent, if it still is/was.
+	return newBuzHashBoundaryChecker(listWindowSize, sha1.Size, listPattern, func(item sequenceItem) []byte {
 		digest := item.(Value).Ref().Digest()
-		_, err := h.Write(digest[:])
-		d.Chk.NoError(err)
-		return h.Sum32()&listPattern == listPattern
-		//return h.HashByte(digest[0])&listPattern == listPattern
+		return digest[:]
 	})
 }
 
