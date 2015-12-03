@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	objectWindowSize = 8 * sha1.Size
+	objectWindowSize = 8
 	objectPattern    = uint32(1<<6 - 1) // Average size of 64 elements
 )
 
@@ -121,8 +121,9 @@ type buzHashBoundaryChecker struct {
 	checkHash  checkHashFn
 }
 
-func newBuzHashBoundaryChecker(windowSize int, checkHash checkHashFn) boundaryChecker {
-	return &buzHashBoundaryChecker{buzhash.NewBuzHash(uint32(windowSize)), windowSize, checkHash}
+func newBuzHashBoundaryChecker(windowSize, valueSize int, checkHash checkHashFn) boundaryChecker {
+	return &buzHashBoundaryChecker{buzhash.NewBuzHash(uint32(windowSize * valueSize)), windowSize, checkHash}
+	//return &buzHashBoundaryChecker{buzhash.NewBuzHash(uint32(windowSize)), windowSize, checkHash}
 }
 
 func (b *buzHashBoundaryChecker) Write(item sequenceItem) bool {
@@ -134,9 +135,8 @@ func (b *buzHashBoundaryChecker) WindowSize() int {
 }
 
 func newMetaSequenceBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(objectWindowSize, func(h *buzhash.BuzHash, item sequenceItem) bool {
-		mt := item.(metaTuple)
-		digest := mt.ref.Digest()
+	return newBuzHashBoundaryChecker(objectWindowSize, sha1.Size, func(h *buzhash.BuzHash, item sequenceItem) bool {
+		digest := item.(metaTuple).ref.Digest()
 		_, err := h.Write(digest[:])
 		d.Chk.NoError(err)
 		return h.Sum32()&objectPattern == objectPattern
@@ -145,7 +145,6 @@ func newMetaSequenceBoundaryChecker() boundaryChecker {
 
 func newMetaSequenceChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
-		d.Chk.True(len(items) > 1)
 		tuples := make(metaSequenceData, len(items))
 		offsetSum := uint64(0)
 

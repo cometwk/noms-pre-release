@@ -28,7 +28,7 @@ func getTestCompoundBlob(datas ...string) compoundBlob {
 func getRandomReader() io.ReadSeeker {
 	length := int(5e5)
 	s := rand.NewSource(42)
-	buff := make([]byte, 5e5, 5e5)
+	buff := make([]byte, length)
 	for i := 0; i < length; i++ {
 		buff[i] = byte(s.Int63() & 0xff)
 	}

@@ -36,7 +36,7 @@ func NewMemoryBlob(r io.Reader) Blob {
 }
 
 func newBlobLeafBoundaryChecker() boundaryChecker {
-	return newBuzHashBoundaryChecker(blobWindowSize, func(h *buzhash.BuzHash, item sequenceItem) bool {
+	return newBuzHashBoundaryChecker(blobWindowSize, 1, func(h *buzhash.BuzHash, item sequenceItem) bool {
 		b := item.(byte)
 		return h.HashByte(b)&blobPattern == blobPattern
 	})

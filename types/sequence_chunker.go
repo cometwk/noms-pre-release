@@ -1,8 +1,6 @@
 package types
 
-import (
-	"github.com/attic-labs/noms/d"
-)
+import "github.com/attic-labs/noms/d"
 
 // TODO put this in a "ptree" directory.
 
@@ -32,6 +30,7 @@ type sequenceChunker struct {
 type makeChunkFn func(values []sequenceItem) (sequenceItem, Value)
 
 // normalizeChunkFn takes a sequence of existing items |values|, and returns a sequence equivalent as though it had never gone through the chunking progress. |prev| is the last item in the sequence before |values| and may be nil if there is no such item.
+// TODO get rid of prev; callers can just pass in a values array of an additional length. it's also important that values only come from the same chunk - this must be commented.
 type normalizeChunkFn func(prev sequenceItem, values []sequenceItem) []sequenceItem
 
 func normalizeChunkNoop(prev sequenceItem, values []sequenceItem) []sequenceItem {
@@ -67,11 +66,11 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 			seq.createParent()
 		}
 		// Prime the chunker into the state it would be if all items in the sequence had been appended one at a time.
-		for _, item := range nzeChunk(nil, cur.maxNPrevItems(boundaryChk.WindowSize()-1)) {
+		// XXX I think this is wrong, it might cross chunk boundaries, which would have reset when constructing the list, but won't reset here. An appropriate way to fix this would be for cursorGetMaxNPrevItems to return a [][]sequenceItem then for this code to be prevItems := cursorGetMaxNPrevItems(); for i, chunk := range prevItems; seq.current = append(seq.current, nzeChunk(prevItems[i-1][0], chunk)), more or less.
+		for _, item := range nzeChunk(nil, cur.maxNPrevItems(boundaryChk.WindowSize()-1)) { // TODO I don't think this should be nil
 			boundaryChk.Write(item)
 		}
-		// Reconstruct this entire chunk.
-		// XXX I think this is wrong, it might cross chunk boundaries, which would have reset when constructing the list, but won't reset here. An appropriate way to fix this would be for cursorGetMaxNPrevItems to return a [][]sequenceItem then for this code to be prevItems := cursorGetMaxNPrevItems(); for i, chunk := range prevItems; seq.current = append(seq.current, nzeChunk(prevItems[i-1][0], chunk)), more or less.
+		// Reconstruct this entire chunk. The previous value is nil because this is the start of the chunk.
 		seq.current = nzeChunk(nil, cur.maxNPrevItems(cur.indexInChunk()))
 		seq.empty = len(seq.current) == 0
 	}
@@ -107,6 +106,8 @@ func (seq *sequenceChunker) createParent() {
 		parent = seq.cur.parent.clone()
 	}
 	seq.parent = newSequenceChunker(parent, seq.parentMakeChunk, seq.parentMakeChunk, seq.parentNzeChunk, seq.parentNzeChunk, seq.newBoundaryChecker(), seq.newBoundaryChecker)
+	// Skip the immediate parent of this cursor, which will no longer be valid. Chunks should be appended to the parent starting after it.
+	seq.parent.Skip()
 }
 
 func (seq *sequenceChunker) commitPendingFirst() {
@@ -129,36 +130,22 @@ func (seq *sequenceChunker) handleChunkBoundary() {
 
 func (seq *sequenceChunker) doneWithChunk() (sequenceItem, Value) {
 	if seq.cur != nil {
-		remainder := seq.cur.maxNNextItems(seq.boundaryChk.WindowSize() - 1)
-		// Carve up the remainder into chunks so that each can be normalized.
-		// TODO this is too complicated... and/or, this should be pulled into the cursor logic, not here, so that it makes sense to test individually.
-		boundaryDetector := seq.cur.clone()
-		var chunks [][]sequenceItem
-		var chunk []sequenceItem
+		// TODO go back to a prevInChunk() method? use that everywhere with nzeChunk, clearer than assuming nil, though I could assert that.
 		var prev sequenceItem
 		if seq.cur.indexInChunk() > 0 {
 			curToPrev := seq.cur.clone()
 			d.Chk.True(curToPrev.retreat())
 			prev = curToPrev.current()
 		}
-		for _, n := range remainder {
-			if chunk != nil && boundaryDetector.indexInChunk() == 0 {
-				chunks = append(chunks, seq.nzeChunk(prev, chunk))
-				chunk = nil
-				prev = nil
-			}
-			chunk = append(chunk, n)
-			boundaryDetector.advance()
-		}
-		chunks = append(chunks, seq.nzeChunk(prev, chunk))
-		// and now we chunk.
-		for _, chunk := range chunks {
-			if seq.parent != nil {
+		for i, chunk := range seq.cur.maxNNextItems(seq.boundaryChk.WindowSize() - 1) {
+			// Don't Skip while pushing up the first chunk, it was already skipped in createParent().
+			if i > 0 && seq.parent != nil {
 				seq.parent.Skip()
 			}
-			for _, n := range chunk {
-				seq.Append(n)
+			for _, v := range seq.nzeChunk(prev, chunk) {
+				seq.Append(v)
 			}
+			prev = nil
 		}
 	}
 	if seq.pendingFirst != nil {

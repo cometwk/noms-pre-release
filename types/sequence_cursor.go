@@ -142,32 +142,42 @@ func (cur *sequenceCursor) maxNPrevItems(n int) []sequenceItem {
 	return prev
 }
 
+// TODO this comment is wrong
 // Returns a slice of the next |n| items in |cur|, including the current item in |cur|. Does not modify |cur|.
-// TODO "plus last chunk"
-// TODO this would be more useful if it returned a [][]sequenceItem, a list of items in each chunk.
-func (cur *sequenceCursor) maxNNextItems(n int) []sequenceItem {
-	next := []sequenceItem{}
-	if n == 0 {
-		return next
+// TODO "plus last chunk" or maybe "at least..."
+func (cur *sequenceCursor) maxNNextItems(n int) [][]sequenceItem {
+	chunks := [][]sequenceItem{}
+	working := []sequenceItem{}
+
+	liftWorking := func() {
+		if len(working) > 0 {
+			chunks = append(chunks, working)
+			working = []sequenceItem{}
+		}
 	}
 
 	if current, ok := cur.maybeCurrent(); ok {
-		next = append(next, current)
+		working = append(working, current)
 	} else {
-		return next
+		return chunks
 	}
 
 	advancer := cur.clone()
 	for i := 1; i < n; i++ {
 		if !advancer.advance() {
-			return next
+			liftWorking()
+			return chunks
 		}
-		next = append(next, advancer.current())
+		if advancer.indexInChunk() == 0 {
+			liftWorking()
+		}
+		working = append(working, advancer.current())
 	}
 
 	for advancer.advance() && advancer.indexInChunk() > 0 {
-		next = append(next, advancer.current())
+		working = append(working, advancer.current())
 	}
+	liftWorking()
 
-	return next
+	return chunks
 }
