@@ -54,16 +54,12 @@ func (cl compoundList) cursorAt(idx uint64) (cursor *sequenceCursor, listLeaf Li
 	cursor, _ = newMetaSequenceCursor(cl, cl.cs)
 
 	chunkStart := cursor.seek(func(carry interface{}, mt sequenceItem) bool {
-		d.Chk.NotNil(mt)
-		d.Chk.NotNil(carry)
-
 		return idx < uint64(carry.(UInt64))+uint64(mt.(metaTuple).value.(UInt64))
 	}, func(carry interface{}, prev, current sequenceItem) interface{} {
 		pv := uint64(0)
 		if prev != nil {
 			pv = uint64(prev.(metaTuple).value.(UInt64))
 		}
-
 		return UInt64(uint64(carry.(UInt64)) + pv)
 	}, UInt64(0))
 
