@@ -158,3 +158,43 @@ func (cur *sequenceCursor) maxNPrevItems(n int) []sequenceItem {
 
 	return prev
 }
+
+// Returns all chunks which encompass at least |n| items, starting from |cur|'s current position (the first chunk may not be complete).
+// If |n| is 0, returns a single chunk with items from the cursor's position to the end of the current chunk.
+// If the cursor is before the start, or at or past the end, returns an empty list.
+func (cur *sequenceCursor) chunksWithNNextItems(n int) [][]sequenceItem {
+	chunks := [][]sequenceItem{}
+
+	var working []sequenceItem
+	liftWorking := func() {
+		if working != nil {
+			chunks = append(chunks, working)
+			working = nil
+		}
+	}
+
+	if current, ok := cur.maybeCurrent(); ok {
+		working = append(working, current)
+	} else {
+		return chunks
+	}
+
+	advancer := cur.clone()
+	for i := 1; i < n; i++ {
+		if !advancer.advance() {
+			liftWorking()
+			return chunks
+		}
+		if advancer.indexInChunk() == 0 {
+			liftWorking()
+		}
+		working = append(working, advancer.current())
+	}
+
+	for advancer.advance() && advancer.indexInChunk() > 0 {
+		working = append(working, advancer.current())
+	}
+	liftWorking()
+
+	return chunks
+}

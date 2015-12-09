@@ -20,6 +20,7 @@ type sequenceChunker struct {
 	makeChunk, parentMakeChunk makeChunkFn
 	boundaryChk                boundaryChecker
 	newBoundaryChecker         newBoundaryCheckerFn
+	used                       bool
 }
 
 // makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items, a tuple of a reference to that chunk which can itself be chunked + its underlying value.
@@ -30,6 +31,7 @@ func newEmptySequenceChunker(makeChunk, parentMakeChunk makeChunkFn, boundaryChk
 }
 
 func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChunkFn, boundaryChk boundaryChecker, newBoundaryChecker newBoundaryCheckerFn) *sequenceChunker {
+	// |cur| will be nil if this is a new sequence, implying this is a new tree, or the tree has grown in height relative to its original chunked form.
 	d.Chk.NotNil(makeChunk)
 	d.Chk.NotNil(parentMakeChunk)
 	d.Chk.NotNil(boundaryChk)
@@ -42,19 +44,21 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 		makeChunk, parentMakeChunk,
 		boundaryChk,
 		newBoundaryChecker,
+		false,
 	}
 
 	if cur != nil {
-		// Eagerly create a chunker for each level of the existing tree. This is correct while sequences can only ever append, and therefore the tree can only ever grow in height, but generally speaking the tree can also shrink - due to both removals and changes - and in that situation we can't simply create every meta-node that was in the cursor. If we did that, we'd end up with meta-nodes with only a single entry, which is illegal.
+		// Eagerly create a chunker for each level of the existing tree, but note that we may not necessarily need them all, since chunk boundaries may change such that the tree ends up shallower. The |seq.used| flag accounts for that case.
 		if cur.parent != nil {
 			seq.createParent()
 		}
 		// Prime the chunker into the state it would be if all items in the sequence had been appended one at a time.
-		for _, item := range cur.maxNPrevItems(boundaryChk.WindowSize()) {
+		for _, item := range cur.maxNPrevItems(boundaryChk.WindowSize() - 1) {
 			boundaryChk.Write(item)
 		}
 		// Reconstruct this entire chunk.
 		seq.current = cur.maxNPrevItems(cur.indexInChunk())
+		seq.used = len(seq.current) > 0
 	}
 
 	return seq
@@ -68,19 +72,33 @@ func (seq *sequenceChunker) Append(item sequenceItem) {
 		seq.commitPendingFirst()
 	}
 	seq.current = append(seq.current, item)
+	seq.used = true
 	if seq.boundaryChk.Write(item) {
 		seq.handleChunkBoundary()
 	}
 }
 
+func (seq *sequenceChunker) Skip() {
+	if seq.cur != nil && seq.cur.advance() && seq.cur.indexInChunk() == 0 {
+		// Advancing moved our cursor into the next chunk. We need to advance our parent's cursor, so that when our parent writes out the remaining chunks it doesn't include the chunk that we skipped.
+		seq.skipParentIfExists()
+	}
+}
+
+func (seq *sequenceChunker) skipParentIfExists() {
+	if seq.parent != nil {
+		seq.parent.Skip()
+	}
+}
+
 func (seq *sequenceChunker) createParent() {
 	d.Chk.True(seq.parent == nil)
-	var curParent *sequenceCursor
-	// seq.cur will be nil if it points to the root of the chunked tree.
+	var parent *sequenceCursor
 	if seq.cur != nil && seq.cur.parent != nil {
-		curParent = seq.cur.parent.clone()
+		// Clone the parent cursor because otherwise calling cur.advance() will affect our parent - and vice versa - in surprising ways. Instead, Skip implements this itself.
+		parent = seq.cur.parent.clone()
 	}
-	seq.parent = newSequenceChunker(curParent, seq.parentMakeChunk, seq.parentMakeChunk, seq.newBoundaryChecker(), seq.newBoundaryChecker)
+	seq.parent = newSequenceChunker(parent, seq.parentMakeChunk, seq.parentMakeChunk, seq.newBoundaryChecker(), seq.newBoundaryChecker)
 }
 
 func (seq *sequenceChunker) commitPendingFirst() {
@@ -102,18 +120,36 @@ func (seq *sequenceChunker) handleChunkBoundary() {
 }
 
 func (seq *sequenceChunker) Done() Value {
+	if seq.cur != nil {
+		// Append the rest of the values in the sequence, up to the window size (plus its chunk). It needs to be the full window size because anything that was appended in the meantime will have changed the boundary chunker.
+		nextChunks := seq.cur.chunksWithNNextItems(seq.boundaryChk.WindowSize())
+		if len(nextChunks) == 0 {
+			// If there are no next chunks it means the cursor was past the end, but due to the way cursors work, the parent cursor will actually point to its last chunk. We need to force it to point past the end so that our parent's Done() method doesn't add the last chunk twice.
+			seq.skipParentIfExists()
+		}
+		for _, chunk := range nextChunks {
+			// Every chunk we repopulate from our cursor is a chunk that the parent should not take from its cursor.
+			seq.skipParentIfExists()
+			for _, v := range chunk {
+				seq.Append(v)
+			}
+		}
+	}
+
 	if seq.pendingFirst != nil {
 		d.Chk.True(seq.parent == nil)
 		d.Chk.Equal(0, len(seq.current))
 		_, done := seq.makeChunk(seq.pendingFirst)
 		return done
 	}
-	if seq.parent != nil {
+
+	if seq.parent != nil && seq.parent.used {
 		if len(seq.current) > 0 {
 			seq.handleChunkBoundary()
 		}
 		return seq.parent.Done()
 	}
+
 	_, done := seq.makeChunk(seq.current)
 	return done
 }

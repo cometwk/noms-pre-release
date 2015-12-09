@@ -227,6 +227,142 @@ func TestCursorGetMaxNPrevItemsWithMultiItemSequence(t *testing.T) {
 	assert.Equal([]sequenceItem{100, 101, 102, 103, 104, 105, 106, 107}, cur.maxNPrevItems(9))
 }
 
+func TestCursorGetChunksWithNNextItemsWithEmptySequence(t *testing.T) {
+	assert := assert.New(t)
+	cur := newTestSequenceCursor([][]int{[]int{}})
+	chunks := cur.chunksWithNNextItems(0)
+	assert.Equal([][]sequenceItem{}, chunks)
+	chunks = cur.chunksWithNNextItems(1)
+	assert.Equal([][]sequenceItem{}, chunks)
+}
+
+func TestCursorGetChunksWithNNextItemsWithSingleItemSequence(t *testing.T) {
+	assert := assert.New(t)
+	cur := newTestSequenceCursor([][]int{[]int{100}, []int{101}, []int{102}})
+
+	test := func(expectChunks [][]sequenceItem, n int) {
+		assert.Equal(expectChunks, cur.chunksWithNNextItems(n))
+	}
+
+	test([][]sequenceItem{[]sequenceItem{100}}, 0)
+	test([][]sequenceItem{[]sequenceItem{100}}, 1)
+	test([][]sequenceItem{[]sequenceItem{100}, []sequenceItem{101}}, 2)
+	test([][]sequenceItem{[]sequenceItem{100}, []sequenceItem{101}, []sequenceItem{102}}, 3)
+	test([][]sequenceItem{[]sequenceItem{100}, []sequenceItem{101}, []sequenceItem{102}}, 4)
+	assert.Equal(0, cur.idx)
+
+	assert.True(cur.advance())
+	test([][]sequenceItem{[]sequenceItem{101}}, 0)
+	test([][]sequenceItem{[]sequenceItem{101}}, 1)
+	test([][]sequenceItem{[]sequenceItem{101}, []sequenceItem{102}}, 2)
+	test([][]sequenceItem{[]sequenceItem{101}, []sequenceItem{102}}, 3)
+	assert.Equal(0, cur.idx)
+
+	assert.True(cur.advance())
+	test([][]sequenceItem{[]sequenceItem{102}}, 0)
+	test([][]sequenceItem{[]sequenceItem{102}}, 1)
+	test([][]sequenceItem{[]sequenceItem{102}}, 2)
+	assert.Equal(0, cur.idx)
+
+	assert.False(cur.advance())
+	test([][]sequenceItem{}, 0)
+	test([][]sequenceItem{}, 1)
+	test([][]sequenceItem{}, 2)
+	assert.Equal(1, cur.idx)
+}
+
+func TestCursorGetChunksWithNNextItemsWithMultiItemSequence(t *testing.T) {
+	assert := assert.New(t)
+	cur := newTestSequenceCursor([][]int{
+		[]int{100, 101, 102, 103},
+		[]int{104, 105, 106, 107},
+	})
+
+	test := func(expectChunks [][]sequenceItem, n int) {
+		assert.Equal(expectChunks, cur.chunksWithNNextItems(n))
+	}
+
+	test([][]sequenceItem{[]sequenceItem{100, 101, 102, 103}}, 0)
+	test([][]sequenceItem{[]sequenceItem{100, 101, 102, 103}}, 1)
+	test([][]sequenceItem{[]sequenceItem{100, 101, 102, 103}}, 2)
+	test([][]sequenceItem{[]sequenceItem{100, 101, 102, 103}}, 3)
+	test([][]sequenceItem{[]sequenceItem{100, 101, 102, 103}}, 4)
+	test([][]sequenceItem{[]sequenceItem{100, 101, 102, 103}, []sequenceItem{104, 105, 106, 107}}, 5)
+	test([][]sequenceItem{[]sequenceItem{100, 101, 102, 103}, []sequenceItem{104, 105, 106, 107}}, 6)
+	test([][]sequenceItem{[]sequenceItem{100, 101, 102, 103}, []sequenceItem{104, 105, 106, 107}}, 7)
+	test([][]sequenceItem{[]sequenceItem{100, 101, 102, 103}, []sequenceItem{104, 105, 106, 107}}, 8)
+	test([][]sequenceItem{[]sequenceItem{100, 101, 102, 103}, []sequenceItem{104, 105, 106, 107}}, 9)
+	assert.Equal(0, cur.idx)
+
+	assert.True(cur.advance())
+	test([][]sequenceItem{[]sequenceItem{101, 102, 103}}, 0)
+	test([][]sequenceItem{[]sequenceItem{101, 102, 103}}, 1)
+	test([][]sequenceItem{[]sequenceItem{101, 102, 103}}, 2)
+	test([][]sequenceItem{[]sequenceItem{101, 102, 103}}, 3)
+	test([][]sequenceItem{[]sequenceItem{101, 102, 103}, []sequenceItem{104, 105, 106, 107}}, 4)
+	test([][]sequenceItem{[]sequenceItem{101, 102, 103}, []sequenceItem{104, 105, 106, 107}}, 5)
+	test([][]sequenceItem{[]sequenceItem{101, 102, 103}, []sequenceItem{104, 105, 106, 107}}, 6)
+	test([][]sequenceItem{[]sequenceItem{101, 102, 103}, []sequenceItem{104, 105, 106, 107}}, 7)
+	test([][]sequenceItem{[]sequenceItem{101, 102, 103}, []sequenceItem{104, 105, 106, 107}}, 8)
+	assert.Equal(1, cur.idx)
+
+	assert.True(cur.advance())
+	test([][]sequenceItem{[]sequenceItem{102, 103}}, 0)
+	test([][]sequenceItem{[]sequenceItem{102, 103}}, 1)
+	test([][]sequenceItem{[]sequenceItem{102, 103}}, 2)
+	test([][]sequenceItem{[]sequenceItem{102, 103}, []sequenceItem{104, 105, 106, 107}}, 3)
+	test([][]sequenceItem{[]sequenceItem{102, 103}, []sequenceItem{104, 105, 106, 107}}, 4)
+	test([][]sequenceItem{[]sequenceItem{102, 103}, []sequenceItem{104, 105, 106, 107}}, 5)
+	test([][]sequenceItem{[]sequenceItem{102, 103}, []sequenceItem{104, 105, 106, 107}}, 6)
+	test([][]sequenceItem{[]sequenceItem{102, 103}, []sequenceItem{104, 105, 106, 107}}, 7)
+	assert.Equal(2, cur.idx)
+
+	assert.True(cur.advance())
+	test([][]sequenceItem{[]sequenceItem{103}}, 0)
+	test([][]sequenceItem{[]sequenceItem{103}}, 1)
+	test([][]sequenceItem{[]sequenceItem{103}, []sequenceItem{104, 105, 106, 107}}, 2)
+	test([][]sequenceItem{[]sequenceItem{103}, []sequenceItem{104, 105, 106, 107}}, 3)
+	test([][]sequenceItem{[]sequenceItem{103}, []sequenceItem{104, 105, 106, 107}}, 4)
+	test([][]sequenceItem{[]sequenceItem{103}, []sequenceItem{104, 105, 106, 107}}, 5)
+	test([][]sequenceItem{[]sequenceItem{103}, []sequenceItem{104, 105, 106, 107}}, 6)
+	assert.Equal(3, cur.idx)
+
+	assert.True(cur.advance())
+	test([][]sequenceItem{[]sequenceItem{104, 105, 106, 107}}, 0)
+	test([][]sequenceItem{[]sequenceItem{104, 105, 106, 107}}, 1)
+	test([][]sequenceItem{[]sequenceItem{104, 105, 106, 107}}, 2)
+	test([][]sequenceItem{[]sequenceItem{104, 105, 106, 107}}, 3)
+	test([][]sequenceItem{[]sequenceItem{104, 105, 106, 107}}, 4)
+	test([][]sequenceItem{[]sequenceItem{104, 105, 106, 107}}, 5)
+	assert.Equal(0, cur.idx)
+
+	assert.True(cur.advance())
+	test([][]sequenceItem{[]sequenceItem{105, 106, 107}}, 0)
+	test([][]sequenceItem{[]sequenceItem{105, 106, 107}}, 1)
+	test([][]sequenceItem{[]sequenceItem{105, 106, 107}}, 2)
+	test([][]sequenceItem{[]sequenceItem{105, 106, 107}}, 3)
+	test([][]sequenceItem{[]sequenceItem{105, 106, 107}}, 4)
+	assert.Equal(1, cur.idx)
+
+	assert.True(cur.advance())
+	test([][]sequenceItem{[]sequenceItem{106, 107}}, 0)
+	test([][]sequenceItem{[]sequenceItem{106, 107}}, 1)
+	test([][]sequenceItem{[]sequenceItem{106, 107}}, 2)
+	test([][]sequenceItem{[]sequenceItem{106, 107}}, 3)
+	assert.Equal(2, cur.idx)
+
+	assert.True(cur.advance())
+	test([][]sequenceItem{[]sequenceItem{107}}, 0)
+	test([][]sequenceItem{[]sequenceItem{107}}, 1)
+	test([][]sequenceItem{[]sequenceItem{107}}, 2)
+	assert.Equal(3, cur.idx)
+
+	assert.False(cur.advance())
+	test([][]sequenceItem{}, 0)
+	test([][]sequenceItem{}, 1)
+	assert.Equal(4, cur.idx)
+}
+
 func TestCursorSeekBinary(t *testing.T) {
 	assert := assert.New(t)
 
