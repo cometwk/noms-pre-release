@@ -94,7 +94,10 @@ func (cl compoundList) MapP(concurrency int, mf MapFunc) []interface{} {
 }
 
 func (cl compoundList) Set(idx uint64, v Value) List {
-	panic("not implemented")
+	seq := cl.sequenceChunkerAtIndex(idx)
+	seq.Skip()
+	seq.Append(v)
+	return seq.Done().(List)
 }
 
 func (cl compoundList) Append(vs ...Value) List {

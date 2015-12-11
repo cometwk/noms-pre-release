@@ -10,6 +10,13 @@ import (
 
 type testSimpleList []Value
 
+func (tsl testSimpleList) Set(idx int, v Value) (res testSimpleList) {
+	res = append(res, tsl[:idx]...)
+	res = append(res, v)
+	res = append(res, tsl[idx+1:]...)
+	return
+}
+
 func (tsl testSimpleList) Insert(idx int, vs ...Value) (res testSimpleList) {
 	res = append(res, tsl[:idx]...)
 	res = append(res, vs...)
@@ -385,5 +392,33 @@ func TestCompoundListRemoveRanges(t *testing.T) {
 	// Compare list length, which doesn't require building a new list every iteration, so the increment can be smaller.
 	for incr, i := 10, 0; i < len(testList)-incr; i += incr {
 		assert.Equal(len(testList)-incr, int(whole.Remove(uint64(i), uint64(i+incr)).Len()))
+	}
+}
+
+func TestCompoundListSet(t *testing.T) {
+	assert := assert.New(t)
+
+	cs := chunks.NewMemoryStore()
+	testList := getTestSimpleList()
+	cl := testList.ToNomsList(cs)
+
+	testIdx := func(idx int, testEquality bool) {
+		newVal := Int64(-1) // Test values are never < 0
+		cl2 := cl.Set(uint64(idx), newVal)
+		assert.False(cl.Equals(cl2))
+		if testEquality {
+			assert.True(testList.Set(idx, newVal).ToNomsList(cs).Equals(cl2))
+		}
+	}
+
+	// Compare list equality. Increment by 100 because each iteration requires building a new list, which is slow, but always test the last index.
+	for incr, i := 100, 0; i < len(testList); i += incr {
+		testIdx(i, true)
+	}
+	testIdx(len(testList)-1, true)
+
+	// Compare list unequality, which doesn't require building a new list every iteration, so the increment can be smaller.
+	for incr, i := 10, 0; i < len(testList); i += incr {
+		testIdx(i, false)
 	}
 }
