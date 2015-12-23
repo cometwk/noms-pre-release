@@ -100,7 +100,8 @@ func (cbr *compoundBlobReader) Seek(offset int64, whence int) (int64, error) {
 
 	seekAbs := uint64(abs)
 
-	chunkStart := cbr.cursor.seekLinear(func(carry interface{}, mt sequenceItem) (bool, interface{}) {
+	// TODO: seekBackward in some cases?
+	chunkStart := cbr.cursor.seekForward(func(carry interface{}, mt sequenceItem) (bool, interface{}) {
 		offset := carry.(uint64) + mt.(metaTuple).uint64Value()
 		return seekAbs < offset, offset
 	}, uint64(0))

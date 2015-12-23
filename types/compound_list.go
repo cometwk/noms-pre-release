@@ -62,7 +62,7 @@ func (cl compoundList) cursorAt(idx uint64) (*sequenceCursor, listLeaf, uint64) 
 	d.Chk.True(idx <= cl.Len())
 	cursor, leaf := newMetaSequenceCursor(cl, cl.cs)
 
-	chunkStart := cursor.seekLinear(func(carry interface{}, mt sequenceItem) (bool, interface{}) {
+	chunkStart := cursor.seekForward(func(carry interface{}, mt sequenceItem) (bool, interface{}) {
 		offset := carry.(uint64) + mt.(metaTuple).uint64Value()
 		return idx < offset, offset
 	}, uint64(0))

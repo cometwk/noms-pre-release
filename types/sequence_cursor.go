@@ -24,7 +24,7 @@ type readChunkFn func(reference sequenceItem) (sequence sequenceItem, length int
 // Returns the value the cursor refers to. Fails an assertion if the cursor doesn't point to a value.
 func (cur *sequenceCursor) current() sequenceItem {
 	item, ok := cur.maybeCurrent()
-	d.Chk.True(ok)
+	d.Chk.True(ok, "{idx: %d, length: %d}", cur.idx, cur.length)
 	return item
 }
 
@@ -119,12 +119,12 @@ func (cur *sequenceCursor) seekBinary(compare sequenceCursorSeekBinaryCompareFn)
 
 type sequenceCursorSeekLinearStepFn func(carryIn interface{}, item sequenceItem) (found bool, carryOut interface{})
 
-// seekLinear seeks the cursor to the first position in the sequence where |step| returns true. This uses a linear search, so there is no ordering restriction. The carry value is initialized as |carry|, but will be replaced with the return value of successive calls to |step|, including when |step| is called on ancestor cursors. The return value is the carry value when seeking stopped. seekLinear will not seek past the end of the cursor.
-func (cur *sequenceCursor) seekLinear(step sequenceCursorSeekLinearStepFn, carry interface{}) interface{} {
+// seekForward seeks the cursor to the first position in the sequence where |step| returns true. This uses a linear search, so there is no ordering restriction. The carry value is initialized as |carry|, but will be replaced with the return value of successive calls to |step|, including when |step| is called on ancestor cursors. The return value is the carry value when seeking stopped. seekForward will not seek past the end of the cursor.
+func (cur *sequenceCursor) seekForward(step sequenceCursorSeekLinearStepFn, carry interface{}) interface{} {
 	d.Chk.NotNil(step)
 
 	if cur.parent != nil {
-		carry = cur.parent.seekLinear(step, carry)
+		carry = cur.parent.seekForward(step, carry)
 		cur.item, cur.length = cur.readChunk(cur.parent.current())
 	}
 
@@ -136,6 +136,33 @@ func (cur *sequenceCursor) seekLinear(step sequenceCursorSeekLinearStepFn, carry
 		}
 		carry = carryOut
 		cur.idx++
+	}
+
+	return carry
+}
+
+// TODO: Comment.
+func (cur *sequenceCursor) seekBackward(step sequenceCursorSeekLinearStepFn, carry interface{}) interface{} {
+	d.Chk.NotNil(step)
+
+	if cur.parent != nil {
+		carry = cur.parent.seekBackward(step, carry)
+		cur.item, cur.length = cur.readChunk(cur.parent.current())
+	}
+
+	cur.idx = cur.length
+	for i := cur.length - 1; i >= 0; i-- {
+		// TODO: Calling cur.getItem when i==0 should be unnecessary, because the cursor will stop seeking regardless of the return value.
+		found, carryOut := step(carry, cur.getItem(cur.item, i))
+		if !found {
+			break
+		}
+		carry = carryOut
+		cur.idx = i
+	}
+
+	if cur.idx == cur.length {
+		cur.idx = cur.length - 1
 	}
 
 	return carry
