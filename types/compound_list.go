@@ -2,6 +2,7 @@ package types
 
 import (
 	"crypto/sha1"
+	"sync/atomic"
 
 	"runtime"
 
@@ -18,13 +19,13 @@ const (
 
 type compoundList struct {
 	metaSequenceObject
-	length uint64
+	length *uint64 // initialized to new(uint64)
 	ref    *ref.Ref
 	cs     chunks.ChunkStore
 }
 
 func buildCompoundList(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
-	cl := compoundList{metaSequenceObject{tuples, t}, tuples.uint64ValuesSum(), &ref.Ref{}, cs}
+	cl := compoundList{metaSequenceObject{tuples, t}, new(uint64), &ref.Ref{}, cs}
 	return valueFromType(cs, cl, t)
 }
 
@@ -49,7 +50,11 @@ func (cl compoundList) Ref() ref.Ref {
 }
 
 func (cl compoundList) Len() uint64 {
-	return cl.length
+	// TODO: Explain why this is sensible.
+	if *cl.length == 0 {
+		atomic.SwapUint64(cl.length, cl.tuples.uint64ValuesSum())
+	}
+	return *cl.length
 }
 
 func (cl compoundList) Empty() bool {
@@ -156,7 +161,13 @@ func (cl compoundList) Set(idx uint64, v Value) List {
 	seq := cl.sequenceChunkerAtIndex(idx)
 	seq.Skip()
 	seq.Append(v)
-	return seq.Done().(List)
+
+	res := seq.Done()
+
+	if res, ok := res.(compoundList); ok && *cl.length != 0 {
+		*res.length = *cl.length
+	}
+	return res.(List)
 }
 
 func (cl compoundList) Append(vs ...Value) List {
@@ -174,7 +185,13 @@ func (cl compoundList) Insert(idx uint64, vs ...Value) List {
 	for _, v := range vs {
 		seq.Append(v)
 	}
-	return seq.Done().(List)
+
+	res := seq.Done()
+
+	if res, ok := res.(compoundList); ok && *cl.length != 0 {
+		*res.length = *cl.length + uint64(len(vs))
+	}
+	return res.(List)
 }
 
 func (cl compoundList) sequenceCursorAtIndex(idx uint64) *sequenceCursor {
@@ -195,12 +212,20 @@ func (cl compoundList) sequenceChunkerAtIndex(idx uint64) *sequenceChunker {
 
 func (cl compoundList) Filter(cb listFilterCallback) List {
 	seq := newEmptySequenceChunker(makeListLeafChunkFn(cl.t, cl.cs), newMetaSequenceChunkFn(cl.t, cl.cs), newListLeafBoundaryChecker(), newMetaSequenceBoundaryChecker)
+	length := uint64(0)
 	cl.IterAll(func(v Value, idx uint64) {
 		if cb(v, idx) {
 			seq.Append(v)
+			length++
 		}
 	})
-	return seq.Done().(List)
+
+	res := seq.Done()
+
+	if res, ok := res.(compoundList); ok {
+		*res.length = length
+	}
+	return res.(List)
 }
 
 func (cl compoundList) Remove(start uint64, end uint64) List {
@@ -212,7 +237,13 @@ func (cl compoundList) Remove(start uint64, end uint64) List {
 	for i := start; i < end; i++ {
 		seq.Skip()
 	}
-	return seq.Done().(compoundList)
+
+	res := seq.Done()
+
+	if res, ok := res.(compoundList); ok && *cl.length != 0 {
+		*res.length = *cl.length - (end - start)
+	}
+	return res.(List)
 }
 
 func (cl compoundList) RemoveAt(idx uint64) List {
