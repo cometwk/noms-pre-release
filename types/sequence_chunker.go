@@ -26,7 +26,7 @@ type sequenceChunker struct {
 	newBoundaryChecker         newBoundaryCheckerFn
 	used                       bool
 	ch                         chan sequenceItem
-	wg, wg2                    sync.WaitGroup
+	wg                         sync.WaitGroup
 }
 
 // makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items, a tuple of a reference to that chunk which can itself be chunked + its underlying value.
@@ -51,8 +51,8 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 		boundaryChk,
 		newBoundaryChecker,
 		false,
-		make(chan sequenceItem),
-		sync.WaitGroup{}, sync.WaitGroup{},
+		make(chan sequenceItem, 1000),
+		sync.WaitGroup{},
 	}
 
 	if cur != nil {
@@ -108,9 +108,9 @@ func (seq *sequenceChunker) createParent() {
 		parent = seq.cur.parent.clone()
 	}
 	seq.parent = newSequenceChunker(parent, seq.parentMakeChunk, seq.parentMakeChunk, seq.newBoundaryChecker(), seq.newBoundaryChecker)
-	seq.parent.wg2.Add(1)
+	seq.parent.wg.Add(1)
 	go func() {
-		defer seq.parent.wg2.Done()
+		defer seq.parent.wg.Done()
 		for item := range seq.parent.ch {
 			seq.parent.Append(item)
 		}
@@ -119,30 +119,20 @@ func (seq *sequenceChunker) createParent() {
 
 func (seq *sequenceChunker) commitPendingFirst() {
 	d.Chk.True(seq.pendingFirst != nil)
-	pf := seq.pendingFirst
+	chunk, _ := seq.makeChunk(seq.pendingFirst)
+	seq.parent.ch <- chunk
 	seq.pendingFirst = nil
-	seq.appendChunkToParent(pf)
 }
 
 func (seq *sequenceChunker) handleChunkBoundary() {
 	d.Chk.True(len(seq.current) > 0)
-	chunkItems := seq.current
-	seq.current = []sequenceItem{}
 	if seq.parent == nil {
-		seq.pendingFirst = chunkItems
+		seq.pendingFirst = seq.current
 	} else {
-		seq.appendChunkToParent(chunkItems)
-	}
-}
-
-func (seq *sequenceChunker) appendChunkToParent(chunkItems []sequenceItem) {
-	d.Chk.NotNil(seq.parent)
-	seq.parent.wg.Add(1)
-	go func() {
-		defer seq.parent.wg.Done()
-		chunk, _ := seq.makeChunk(chunkItems)
+		chunk, _ := seq.makeChunk(seq.current)
 		seq.parent.ch <- chunk
-	}()
+	}
+	seq.current = []sequenceItem{}
 }
 
 func (seq *sequenceChunker) Done() Value {
@@ -161,9 +151,8 @@ func (seq *sequenceChunker) Done() Value {
 		if len(seq.current) > 0 {
 			seq.handleChunkBoundary()
 		}
-		seq.parent.wg.Wait()
 		close(seq.parent.ch)
-		seq.parent.wg2.Wait()
+		seq.parent.wg.Wait()
 		return seq.parent.Done()
 	}
 
