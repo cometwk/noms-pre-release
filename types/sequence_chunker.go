@@ -1,6 +1,10 @@
 package types
 
-import "github.com/attic-labs/noms/d"
+import (
+	"sync"
+
+	"github.com/attic-labs/noms/d"
+)
 
 type sequenceItem interface{}
 
@@ -21,6 +25,8 @@ type sequenceChunker struct {
 	boundaryChk                boundaryChecker
 	newBoundaryChecker         newBoundaryCheckerFn
 	used                       bool
+	ch                         chan sequenceItem
+	wg, wg2                    sync.WaitGroup
 }
 
 // makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items, a tuple of a reference to that chunk which can itself be chunked + its underlying value.
@@ -45,6 +51,8 @@ func newSequenceChunker(cur *sequenceCursor, makeChunk, parentMakeChunk makeChun
 		boundaryChk,
 		newBoundaryChecker,
 		false,
+		make(chan sequenceItem),
+		sync.WaitGroup{}, sync.WaitGroup{},
 	}
 
 	if cur != nil {
@@ -100,24 +108,41 @@ func (seq *sequenceChunker) createParent() {
 		parent = seq.cur.parent.clone()
 	}
 	seq.parent = newSequenceChunker(parent, seq.parentMakeChunk, seq.parentMakeChunk, seq.newBoundaryChecker(), seq.newBoundaryChecker)
+	seq.parent.wg2.Add(1)
+	go func() {
+		defer seq.parent.wg2.Done()
+		for item := range seq.parent.ch {
+			seq.parent.Append(item)
+		}
+	}()
 }
 
 func (seq *sequenceChunker) commitPendingFirst() {
 	d.Chk.True(seq.pendingFirst != nil)
-	chunk, _ := seq.makeChunk(seq.pendingFirst)
-	seq.parent.Append(chunk)
+	pf := seq.pendingFirst
 	seq.pendingFirst = nil
+	seq.appendChunkToParent(pf)
 }
 
 func (seq *sequenceChunker) handleChunkBoundary() {
 	d.Chk.True(len(seq.current) > 0)
-	if seq.parent == nil {
-		seq.pendingFirst = seq.current
-	} else {
-		chunk, _ := seq.makeChunk(seq.current)
-		seq.parent.Append(chunk)
-	}
+	chunkItems := seq.current
 	seq.current = []sequenceItem{}
+	if seq.parent == nil {
+		seq.pendingFirst = chunkItems
+	} else {
+		seq.appendChunkToParent(chunkItems)
+	}
+}
+
+func (seq *sequenceChunker) appendChunkToParent(chunkItems []sequenceItem) {
+	d.Chk.NotNil(seq.parent)
+	seq.parent.wg.Add(1)
+	go func() {
+		defer seq.parent.wg.Done()
+		chunk, _ := seq.makeChunk(chunkItems)
+		seq.parent.ch <- chunk
+	}()
 }
 
 func (seq *sequenceChunker) Done() Value {
@@ -136,6 +161,9 @@ func (seq *sequenceChunker) Done() Value {
 		if len(seq.current) > 0 {
 			seq.handleChunkBoundary()
 		}
+		seq.parent.wg.Wait()
+		close(seq.parent.ch)
+		seq.parent.wg2.Wait()
 		return seq.parent.Done()
 	}
 
