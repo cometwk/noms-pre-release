@@ -15,6 +15,7 @@ const (
 // metaSequence is a logical abstraction, but has no concrete "base" implementation. A Meta Sequence is a non-leaf (internal) node of a "probably" tree, which results from the chunking of an ordered or unordered sequence of values.
 type metaSequence interface {
 	Value
+	numLeaves() uint64
 	data() metaSequenceData
 	tupleAt(idx int) metaTuple
 	tupleSlice(to int) []metaTuple
@@ -55,8 +56,13 @@ func (msd metaSequenceData) last() metaTuple {
 }
 
 type metaSequenceObject struct {
-	tuples metaSequenceData
-	t      Type
+	nLeaves uint64
+	tuples  metaSequenceData
+	t       Type
+}
+
+func (ms metaSequenceObject) numLeaves() uint64 {
+	return ms.nLeaves
 }
 
 func (ms metaSequenceObject) tupleAt(idx int) metaTuple {
@@ -96,7 +102,7 @@ func (ms metaSequenceObject) Type() Type {
 	return ms.t
 }
 
-type metaBuilderFunc func(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value
+type metaBuilderFunc func(numLeaves uint64, tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value
 
 var (
 	metaFuncMap map[NomsKind]metaBuilderFunc = map[NomsKind]metaBuilderFunc{}
@@ -106,9 +112,9 @@ func registerMetaValue(k NomsKind, bf metaBuilderFunc) {
 	metaFuncMap[k] = bf
 }
 
-func newMetaSequenceFromData(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
+func newMetaSequenceFromData(numLeaves uint64, tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
 	if bf, ok := metaFuncMap[t.Kind()]; ok {
-		return bf(tuples, t, cs)
+		return bf(numLeaves, tuples, t, cs)
 	}
 
 	panic("not reachable")

@@ -237,7 +237,7 @@ func newMapLeafBoundaryChecker() boundaryChecker {
 
 func makeMapLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
-		mapData := make([]mapEntry, len(items), len(items))
+		mapData := make([]mapEntry, len(items))
 
 		for i, v := range items {
 			mapData[i] = v.(mapEntry)

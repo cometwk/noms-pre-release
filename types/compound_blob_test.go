@@ -16,12 +16,14 @@ import (
 
 func getTestCompoundBlob(datas ...string) compoundBlob {
 	tuples := make([]metaTuple, len(datas))
+	numLeaves := 0
 	ms := chunks.NewMemoryStore()
 	for i, s := range datas {
 		b := NewBlob(bytes.NewBufferString(s), ms)
 		tuples[i] = metaTuple{b, ref.Ref{}, Uint64(len(s))}
+		numLeaves += len(s)
 	}
-	return newCompoundBlob(tuples, ms)
+	return newCompoundBlob(uint64(numLeaves), tuples, ms)
 }
 
 func getRandomReader() io.ReadSeeker {
@@ -186,7 +188,7 @@ func TestCompoundBlobChunks(t *testing.T) {
 
 	bl1 := newBlobLeaf([]byte("hello"))
 	bl2 := newBlobLeaf([]byte("world"))
-	cb = newCompoundBlob([]metaTuple{{bl1, ref.Ref{}, Uint64(uint64(5))}, {bl2, ref.Ref{}, Uint64(uint64(10))}}, cs)
+	cb = newCompoundBlob(15, []metaTuple{{bl1, ref.Ref{}, Uint64(uint64(5))}, {bl2, ref.Ref{}, Uint64(uint64(10))}}, cs)
 	assert.Equal(2, len(cb.Chunks()))
 }
 

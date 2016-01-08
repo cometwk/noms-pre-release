@@ -200,7 +200,7 @@ func newSetLeafBoundaryChecker() boundaryChecker {
 
 func makeSetLeafChunkFn(t Type, cs chunks.ChunkStore) makeChunkFn {
 	return func(items []sequenceItem) (sequenceItem, Value) {
-		setData := make([]Value, len(items), len(items))
+		setData := make([]Value, len(items))
 
 		for i, v := range items {
 			setData[i] = v.(Value)

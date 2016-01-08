@@ -17,8 +17,8 @@ type compoundMap struct {
 	cs  chunks.ChunkStore
 }
 
-func buildCompoundMap(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
-	cm := compoundMap{metaSequenceObject{tuples, t}, &ref.Ref{}, cs}
+func buildCompoundMap(numLeaves uint64, tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
+	cm := compoundMap{metaSequenceObject{numLeaves, tuples, t}, &ref.Ref{}, cs}
 	return valueFromType(cs, cm, t)
 }
 
@@ -34,12 +34,8 @@ func (cm compoundMap) Ref() ref.Ref {
 	return EnsureRef(cm.ref, cm)
 }
 
-func (cm compoundMap) Len() (length uint64) {
-	// https://github.com/attic-labs/noms/issues/764
-	cm.IterAll(func(k, v Value) {
-		length++
-	})
-	return
+func (cm compoundMap) Len() uint64 {
+	return cm.numLeaves()
 }
 
 func (cm compoundMap) Empty() bool {

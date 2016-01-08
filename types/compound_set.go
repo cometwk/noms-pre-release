@@ -2,7 +2,6 @@ package types
 
 import (
 	"github.com/attic-labs/noms/chunks"
-	"github.com/attic-labs/noms/d"
 	"github.com/attic-labs/noms/ref"
 )
 
@@ -18,8 +17,8 @@ type compoundSet struct {
 	cs  chunks.ChunkStore
 }
 
-func buildCompoundSet(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
-	s := compoundSet{metaSequenceObject{tuples, t}, &ref.Ref{}, cs}
+func buildCompoundSet(numLeaves uint64, tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
+	s := compoundSet{metaSequenceObject{numLeaves, tuples, t}, &ref.Ref{}, cs}
 	return valueFromType(cs, s, t)
 }
 
@@ -35,16 +34,11 @@ func (cs compoundSet) Ref() ref.Ref {
 	return EnsureRef(cs.ref, cs)
 }
 
-func (cs compoundSet) Len() (length uint64) {
-	// https://github.com/attic-labs/noms/issues/764
-	cs.IterAll(func(v Value) {
-		length++
-	})
-	return
+func (cs compoundSet) Len() uint64 {
+	return cs.numLeaves()
 }
 
 func (cs compoundSet) Empty() bool {
-	d.Chk.True(cs.Len() > 0) // A compound object should never be empty.
 	return false
 }
 

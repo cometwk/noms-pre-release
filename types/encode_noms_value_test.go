@@ -139,12 +139,12 @@ func TestWriteCompoundBlob(t *testing.T) {
 	r2 := ref.Parse("sha1-0000000000000000000000000000000000000002")
 	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
 
-	v := newCompoundBlob([]metaTuple{{nil, r1, Uint64(20)}, {nil, r2, Uint64(40)}, {nil, r3, Uint64(60)}}, cs)
+	v := newCompoundBlob(60, []metaTuple{{nil, r1, Uint64(20)}, {nil, r2, Uint64(20)}, {nil, r3, Uint64(20)}}, cs)
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(v)
 
 	// the order of the elements is based on the ref of the value.
-	assert.EqualValues([]interface{}{BlobKind, true, []interface{}{r1.String(), "20", r2.String(), "40", r3.String(), "60"}}, w.toArray())
+	assert.EqualValues([]interface{}{BlobKind, true, "60", []interface{}{r1.String(), "20", r2.String(), "20", r3.String(), "20"}}, w.toArray())
 }
 
 func TestWriteEmptyStruct(t *testing.T) {
@@ -328,11 +328,11 @@ func TestWriteCompoundList(t *testing.T) {
 	ltr := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
 	leaf1 := newListLeaf(cs, ltr, Int32(0))
 	leaf2 := newListLeaf(cs, ltr, Int32(1), Int32(2), Int32(3))
-	cl := buildCompoundList([]metaTuple{{leaf1, ref.Ref{}, Uint64(1)}, {leaf2, ref.Ref{}, Uint64(4)}}, ltr, cs)
+	cl := buildCompoundList(4, []metaTuple{{leaf1, ref.Ref{}, Uint64(1)}, {leaf2, ref.Ref{}, Uint64(3)}}, ltr, cs)
 
 	w := newJsonArrayWriter(cs)
 	w.writeTopLevelValue(cl)
-	assert.EqualValues([]interface{}{ListKind, Int32Kind, true, []interface{}{leaf1.Ref().String(), "1", leaf2.Ref().String(), "4"}}, w.toArray())
+	assert.EqualValues([]interface{}{ListKind, Int32Kind, true, "4", []interface{}{leaf1.Ref().String(), "1", leaf2.Ref().String(), "3"}}, w.toArray())
 }
 
 func TestWriteListOfValue(t *testing.T) {

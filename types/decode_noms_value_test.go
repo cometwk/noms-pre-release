@@ -132,9 +132,9 @@ func TestReadCompoundList(t *testing.T) {
 	tr := MakeCompoundType(ListKind, MakePrimitiveType(Int32Kind))
 	leaf1 := newListLeaf(cs, tr, Int32(0))
 	leaf2 := newListLeaf(cs, tr, Int32(1), Int32(2), Int32(3))
-	l2 := buildCompoundList([]metaTuple{{leaf1, ref.Ref{}, Uint64(1)}, {leaf2, ref.Ref{}, Uint64(4)}}, tr, cs)
+	l2 := buildCompoundList(4, []metaTuple{{leaf1, ref.Ref{}, Uint64(1)}, {leaf2, ref.Ref{}, Uint64(3)}}, tr, cs)
 
-	a := parseJson(`[%d, %d, true, ["%s", "1", "%s", "4"]]`, ListKind, Int32Kind, leaf1.Ref(), leaf2.Ref())
+	a := parseJson(`[%d, %d, true, "4", ["%s", "1", "%s", "3"]]`, ListKind, Int32Kind, leaf1.Ref(), leaf2.Ref())
 	r := newJsonArrayReader(a, cs)
 	l := r.readTopLevelValue()
 
@@ -204,13 +204,13 @@ func TestReadCompoundBlob(t *testing.T) {
 	r1 := ref.Parse("sha1-0000000000000000000000000000000000000001")
 	r2 := ref.Parse("sha1-0000000000000000000000000000000000000002")
 	r3 := ref.Parse("sha1-0000000000000000000000000000000000000003")
-	a := parseJson(`[%d, true, ["%s", "20", "%s", "40", "%s", "60"]]`, BlobKind, r1, r2, r3)
+	a := parseJson(`[%d, true, "60", ["%s", "20", "%s", "20", "%s", "20"]]`, BlobKind, r1, r2, r3)
 	r := newJsonArrayReader(a, cs)
 
 	m := r.readTopLevelValue()
 	_, ok := m.(compoundBlob)
 	assert.True(ok)
-	m2 := newCompoundBlob([]metaTuple{{nil, r1, Uint64(20)}, {nil, r2, Uint64(40)}, {nil, r3, Uint64(60)}}, cs)
+	m2 := newCompoundBlob(60, []metaTuple{{nil, r1, Uint64(20)}, {nil, r2, Uint64(20)}, {nil, r3, Uint64(20)}}, cs)
 
 	assert.True(m.Type().Equals(m2.Type()))
 	assert.Equal(m.Ref().String(), m2.Ref().String())

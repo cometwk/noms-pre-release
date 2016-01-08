@@ -18,13 +18,12 @@ const (
 
 type compoundList struct {
 	metaSequenceObject
-	length uint64
-	ref    *ref.Ref
-	cs     chunks.ChunkStore
+	ref *ref.Ref
+	cs  chunks.ChunkStore
 }
 
-func buildCompoundList(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
-	cl := compoundList{metaSequenceObject{tuples, t}, tuples.uint64ValuesSum(), &ref.Ref{}, cs}
+func buildCompoundList(numLeaves uint64, tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
+	cl := compoundList{metaSequenceObject{numLeaves, tuples, t}, &ref.Ref{}, cs}
 	return valueFromType(cs, cl, t)
 }
 
@@ -49,11 +48,10 @@ func (cl compoundList) Ref() ref.Ref {
 }
 
 func (cl compoundList) Len() uint64 {
-	return cl.length
+	return cl.numLeaves()
 }
 
 func (cl compoundList) Empty() bool {
-	d.Chk.True(cl.Len() > 0) // A compound object should never be empty.
 	return false
 }
 

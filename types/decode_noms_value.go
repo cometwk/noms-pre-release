@@ -172,6 +172,7 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t Type, pkg *Package) (Value, bo
 		return nil, false
 	}
 
+	numLeaves := r.readUint()
 	r2 := newJsonArrayReader(r.readArray(), r.cs)
 	data := metaSequenceData{}
 	indexType := indexTypeForMetaSequence(t)
@@ -182,7 +183,7 @@ func (r *jsonArrayReader) maybeReadMetaSequence(t Type, pkg *Package) (Value, bo
 	}
 
 	t = fixupType(t, pkg)
-	return newMetaSequenceFromData(data, t, r.cs), true
+	return newMetaSequenceFromData(numLeaves, data, t, r.cs), true
 }
 
 func (r *jsonArrayReader) readEnum(t Type, pkg *Package) Value {

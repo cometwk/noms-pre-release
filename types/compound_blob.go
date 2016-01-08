@@ -13,18 +13,17 @@ import (
 // It implements the Blob interface.
 type compoundBlob struct {
 	metaSequenceObject
-	length uint64
-	ref    *ref.Ref
-	cs     chunks.ChunkStore
+	ref *ref.Ref
+	cs  chunks.ChunkStore
 }
 
-func newCompoundBlob(tuples metaSequenceData, cs chunks.ChunkStore) compoundBlob {
-	return buildCompoundBlob(tuples, typeForBlob, cs).(compoundBlob)
+func newCompoundBlob(numLeaves uint64, tuples metaSequenceData, cs chunks.ChunkStore) compoundBlob {
+	return buildCompoundBlob(numLeaves, tuples, typeForBlob, cs).(compoundBlob)
 }
 
-func buildCompoundBlob(tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
+func buildCompoundBlob(numLeaves uint64, tuples metaSequenceData, t Type, cs chunks.ChunkStore) Value {
 	d.Chk.True(t.Equals(typeForBlob))
-	return compoundBlob{metaSequenceObject{tuples, typeForBlob}, tuples.uint64ValuesSum(), &ref.Ref{}, cs}
+	return compoundBlob{metaSequenceObject{numLeaves, tuples, typeForBlob}, &ref.Ref{}, cs}
 }
 
 func init() {
@@ -46,7 +45,7 @@ func (cb compoundBlob) Ref() ref.Ref {
 }
 
 func (cb compoundBlob) Len() uint64 {
-	return cb.length
+	return cb.numLeaves()
 }
 
 type compoundBlobReader struct {

@@ -30,7 +30,8 @@ func (cur *sequenceCursor) current() sequenceItem {
 
 // Returns the value the cursor refers to, if any. If the cursor doesn't point to a value, returns (nil, false).
 func (cur *sequenceCursor) maybeCurrent() (sequenceItem, bool) {
-	d.Chk.True(cur.idx >= -1 && cur.idx <= cur.length)
+	d.Chk.True(cur.idx >= -1, "%d < -1", cur.idx)
+	d.Chk.True(cur.idx <= cur.length, "%d > %d", cur.idx, cur.length)
 	if cur.idx == -1 || cur.idx == cur.length {
 		return nil, false
 	} else {
