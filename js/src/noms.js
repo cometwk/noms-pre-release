@@ -1,6 +1,7 @@
 // @flow
 
 export {AsyncIterator} from './async_iterator.js';
+export {NomsBlob, BlobReader} from './blob.js';
 export {DataStore} from './datastore.js';
 export {decodeNomsValue} from './decode.js';
 export {default as Chunk} from './chunk.js';

@@ -1,5 +1,6 @@
 // @flow
 
+import {NomsBlob, BlobLeafSequence} from './blob.js';
 import Chunk from './chunk.js';
 import Ref from './ref.js';
 import Struct from './struct.js';
@@ -7,7 +8,7 @@ import type {ChunkStore} from './chunk_store.js';
 import type {NomsKind} from './noms_kind.js';
 import {decode as decodeBase64} from './base64.js';
 import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType,
-    makeUnresolvedType, StructDesc, Type} from './type.js';
+    makeUnresolvedType, StructDesc, Type, blobType} from './type.js';
 import {indexTypeForMetaSequence, MetaTuple, newMetaSequenceFromData} from './meta_sequence.js';
 import {invariant, notNull} from './assert.js';
 import {isPrimitiveKind, Kind} from './noms_kind.js';
@@ -19,6 +20,15 @@ import {NomsSet, SetLeafSequence} from './set.js';
 
 const typedTag = 't ';
 const blobTag = 'b ';
+
+export function arrayBufferToBlob(cs: ChunkStore, t: Type, buf: ArrayBuffer): NomsBlob {
+  // TODO: Change Sequence so that we don't need to convert to an Array.
+  const items = [];
+  for (let arr = new Uint8Array(buf), i = 0; i < arr.length; i++) {
+    items.push(arr[i]);
+  }
+  return new NomsBlob(t, new BlobLeafSequence(cs, t, items));
+}
 
 class UnresolvedPackage {
   pkgRef: Ref;
@@ -128,9 +138,8 @@ class JsonArrayReader {
     throw new Error('Unreachable');
   }
 
-  readBlob(): Promise<ArrayBuffer> {
-    const s = this.readString();
-    return Promise.resolve(decodeBase64(s));
+  readBlob(t: Type): NomsBlob {
+    return arrayBufferToBlob(this._cs, t, decodeBase64(this.readString()));
   }
 
   readSequence(t: Type, pkg: ?Package): Array<any> {
@@ -227,12 +236,14 @@ class JsonArrayReader {
   readValueWithoutTag(t: Type, pkg: ?Package = null): any {
     // TODO: Verify read values match tagged kinds.
     switch (t.kind) {
-      case Kind.Blob:
+      case Kind.Blob: {
         const isMeta = this.readBool();
-        // https://github.com/attic-labs/noms/issues/798
-        invariant(!isMeta, 'CompoundBlob not supported');
-        return this.readBlob();
-
+        if (isMeta) {
+          const r2 = new JsonArrayReader(this.readArray(), this._cs);
+          return r2.readMetaSequence(t, pkg);
+        }
+        return this.readBlob(t);
+      }
       case Kind.Bool:
         return this.readBool();
       case Kind.Float32:
@@ -419,9 +430,8 @@ function decodeNomsValue(chunk: Chunk, cs: ChunkStore): Promise<any> {
       const reader = new JsonArrayReader(payload, cs);
       return reader.readTopLevelValue();
     }
-    case blobTag: {
-      return Promise.resolve(chunk.data.buffer.slice(2));
-    }
+    case blobTag:
+      return Promise.resolve(arrayBufferToBlob(cs, blobType, chunk.data.buffer.slice(2)));
     default:
       throw new Error('Not implemented');
   }

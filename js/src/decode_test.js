@@ -1,5 +1,7 @@
 // @flow
 
+import {encode as encodeBase64} from './base64.js';
+import {NomsBlob} from './blob.js';
 import Chunk from './chunk.js';
 import MemoryStore from './memory_store.js';
 import Ref from './ref.js';
@@ -8,9 +10,9 @@ import test from './async_test.js';
 import type {float64, int32, int64, uint8, uint16, uint32, uint64} from './primitives.js';
 import type {TypeDesc} from './type.js';
 import {assert} from 'chai';
-import {decodeNomsValue, JsonArrayReader} from './decode.js';
-import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type,}
-    from './type.js';
+import {arrayBufferToBlob, decodeNomsValue, JsonArrayReader} from './decode.js';
+import {Field, makeCompoundType, makeEnumType, makePrimitiveType, makeStructType, makeType, Type,
+    blobType} from './type.js';
 import {IndexedMetaSequence, MetaTuple} from './meta_sequence.js';
 import {invariant, notNull} from './assert.js';
 import {Kind} from './noms_kind.js';
@@ -24,6 +26,14 @@ import {Value} from './value.js';
 import {writeValue} from './encode.js';
 
 suite('Decode', () => {
+  function stringToBuffer(s) {
+    const bytes = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) {
+      bytes[i] = s.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
   test('read', async () => {
     const ms = new MemoryStore();
     const a = [1, 'hi', true];
@@ -87,9 +97,6 @@ suite('Decode', () => {
     await doTest(1e20, [Kind.Float64, '1e+20']);
 
     await doTest('hi', [Kind.String, 'hi']);
-
-    const blob = new Uint8Array([0x00, 0x01]).buffer;
-    await doTest(blob, [Kind.Blob, false, 'AAE=']);
   });
 
   test('read list of int 32', async () => {
@@ -464,19 +471,13 @@ suite('Decode', () => {
     assert.strictEqual(1, await commit.get('value'));
   });
 
-  test('top level blob', async () => {
-    function stringToBuffer(s) {
-      const bytes = new Uint8Array(s.length);
-      for (let i = 0; i < s.length; i++) {
-        bytes[i] = s.charCodeAt(i);
-      }
-      return bytes.buffer;
-    }
-
+  test('out of line blob', async () => {
     const chunk = Chunk.fromString('b hi');
-    const v = await decodeNomsValue(chunk, new MemoryStore());
-    assert.equal(2, v.byteLength);
-    assert.deepEqual(stringToBuffer('hi'), v);
+    const blob = await decodeNomsValue(chunk, new MemoryStore());
+    const r = await blob.getReader().read();
+    assert.isFalse(r.done);
+    assert.equal(2, r.value.byteLength);
+    assert.deepEqual(stringToBuffer('hi'), r.value);
 
     const data = new Uint8Array(2 + 256);
     data[0] = 'b'.charCodeAt(0);
@@ -488,8 +489,43 @@ suite('Decode', () => {
     }
 
     const chunk2 = new Chunk(data);
-    const v2 = await decodeNomsValue(chunk2, new MemoryStore());
-    assert.equal(bytes.buffer.byteLength, v2.byteLength);
-    assert.deepEqual(bytes.buffer, v2);
+    const blob2 = await decodeNomsValue(chunk2, new MemoryStore());
+    const r2 = await blob2.getReader().read();
+    assert.isFalse(r2.done);
+    assert.equal(bytes.buffer.byteLength, r2.value.byteLength);
+    assert.deepEqual(bytes.buffer, r2.value);
+  });
+
+  test('inline blob', async () => {
+    const ms = new MemoryStore();
+    const a = [
+      Kind.List, Kind.Blob, false,
+      [false, encodeBase64(stringToBuffer('hello')), false, encodeBase64(stringToBuffer('world'))],
+    ];
+    const r = new JsonArrayReader(a, ms);
+    const v: NomsList<NomsBlob> = await r.readTopLevelValue();
+    invariant(v instanceof NomsList);
+
+    assert.strictEqual(2, v.length);
+    const [b1, b2] = [await v.get(0), await v.get(1)];
+    assert.deepEqual({done: false, value: stringToBuffer('hello')}, await b1.getReader().read());
+    assert.deepEqual({done: false, value: stringToBuffer('world')}, await b2.getReader().read());
+  });
+
+  test('compound blob', async () => {
+    const ms = new MemoryStore();
+
+    const r1 = writeValue(arrayBufferToBlob(ms, blobType, stringToBuffer('hi')), blobType, ms);
+    const r2 = writeValue(arrayBufferToBlob(ms, blobType, stringToBuffer('world')), blobType, ms);
+
+    const a = [Kind.Blob, true, [r1.ref, '2', r2.ref, '5']];
+    const r = new JsonArrayReader(a, ms);
+    const v: NomsBlob = await r.readTopLevelValue();
+    invariant(v instanceof NomsBlob);
+
+    const reader = v.getReader();
+    assert.deepEqual({done: false, value: stringToBuffer('hi')}, await reader.read());
+    assert.deepEqual({done: false, value: stringToBuffer('world')}, await reader.read());
+    assert.deepEqual({done: true}, reader.read());
   });
 });
