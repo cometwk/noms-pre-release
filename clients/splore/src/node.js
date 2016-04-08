@@ -3,7 +3,6 @@
 import classNames from 'classnames';
 import React from 'react';
 import {Ref} from '@attic/noms';
-import nomsServer from './noms_server.js';
 
 type Props = {
   canOpen: boolean,
@@ -47,12 +46,7 @@ export default class Node extends React.Component<void, Props, State> {
     }
 
     const translate = `translate3d(${this.state.x}px, ${this.state.y}px, 0)`;
-
-    let text = this.props.text;
-    if (this.props.nomsRef) {
-      const url = `${nomsServer}/ref/${this.props.nomsRef.toString()}`;
-      text = <a href={url}>{text}</a>;
-    }
+    const text = this.props.text;
 
     const paraStyle = {
       overflow: 'hidden',

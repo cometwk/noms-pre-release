@@ -1,7 +1,6 @@
 // @flow
 
 import Layout from './layout.js';
-import React from 'react';
 import ReactDOM from 'react-dom';
 import {
   DataStore,
@@ -25,7 +24,6 @@ import type {NodeGraph} from './buchheim.js';
 
 const data: NodeGraph = {nodes: {}, links: {}};
 let rootRef: Ref;
-let httpStore: HttpStore;
 let dataStore: DataStore;
 
 let renderNode: ?HTMLElement;
@@ -38,21 +36,21 @@ window.onresize = render;
 
 function load() {
   renderNode = document.getElementById('splore');
-  location.hash.substr(1).split('&').forEach(pair => {
+
+  const href = decodeURIComponent(location.href);
+  href.substr(href.indexOf('?') + 1).split('&').forEach(pair => {
     const [k, v] = pair.split('=');
     hash[k] = v;
   });
 
-  if (!hash.server) {
-    renderPrompt();
-    return;
-  }
+  invariant(hash.store);
 
   const opts = {};
   if (hash.token) {
     opts['headers'] = {Authorization: `Bearer ${hash.token}`};
   }
-  httpStore = new HttpStore(hash.server, undefined, undefined, opts);
+
+  const httpStore = new HttpStore(hash.store, undefined, undefined, opts);
   dataStore = new DataStore(httpStore);
 
   const setRootRef = ref => {
@@ -63,7 +61,9 @@ function load() {
   if (hash.ref) {
     setRootRef(Ref.parse(hash.ref));
   } else {
-    httpStore.getRoot().then(setRootRef);
+    httpStore.getRoot().then(root => {
+      setRootRef(root);
+    });
   }
 }
 
@@ -230,57 +230,6 @@ function handleNodeClick(e: MouseEvent, id: string) {
       });
     }
   }
-}
-
-function setServer(url: string, token: ?string, ref: ?string) {
-  let hash = `server=${url}`;
-  if (token) {
-    hash += '&token=' + token;
-  }
-  if (ref) {
-    hash += '&ref=' + ref;
-  }
-  location.hash = hash;
-}
-
-type PromptState = {
-  server: string,
-}
-
-class Prompt extends React.Component<void, {}, PromptState> {
-  state: PromptState;
-
-  render() {
-    const fontStyle: {[key: string]: any} = {
-      fontFamily: 'Menlo',
-      fontSize: 14,
-    };
-    const inputStyle = Object.assign(fontStyle, {}, {width: '50ex', marginBottom: '0.5em'});
-    return <div style={{display: 'flex', height: '100%', alignItems: 'center',
-      justifyContent: 'center'}}>
-      <div style={fontStyle}>
-        Can haz server?
-        <form style={{margin:'0.5em 0'}} onSubmit={() => this._handleOnSubmit()}>
-          <input type='text' ref='url' autoFocus={true} style={inputStyle}
-            defaultValue='http://api.noms.io/-/ds/[user]'/><br/>
-          <input type='text' ref='token' style={inputStyle}
-            placeholder='auth token'/>
-          <input type='text' ref='ref' style={inputStyle}
-            placeholder='sha1-xyz (ref to jump to)' />
-          <button type='submit'>OK</button>
-        </form>
-      </div>
-    </div>;
-  }
-
-  _handleOnSubmit() {
-    const {url, token, ref} = this.refs;
-    setServer(url.value, token.value, ref.value);
-  }
-}
-
-function renderPrompt() {
-  ReactDOM.render(<Prompt/>, renderNode);
 }
 
 function render() {

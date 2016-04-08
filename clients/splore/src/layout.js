@@ -8,7 +8,7 @@ import {TreeNode} from './buchheim.js';
 type Props = {
   data: NodeGraph,
   onNodeClick: (e: Event, s: string) => void,
-  tree: TreeNode
+  tree: TreeNode,
 }
 
 export default function Layout(props: Props) : React.Element {
