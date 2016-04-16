@@ -11,7 +11,7 @@ export type BoundaryChecker<T> = {
 
 export type NewBoundaryCheckerFn<T> = () => BoundaryChecker<T>;
 
-export type makeChunkFn = (items: Array<any>) => [any, any];
+export type makeChunkFn = (items: Array<any>, numLeaves: number) => [any, any];
 
 export async function chunkSequence<S, T>(
   cursor: ?SequenceCursor,
@@ -31,15 +31,15 @@ export async function chunkSequence<S, T>(
   if (remove > 0) {
     invariant(cursor);
     for (let i = 0; i < remove; i++) {
-      await chunker.skip();
+      await chunker.skip(1);
     }
   }
 
   for (let i = 0; i < insert.length; i++) {
-    chunker.append(insert[i]);
+    chunker.append(insert[i], 1);
   }
 
-  return await chunker.done();
+  return chunker.done();
 }
 
 export class SequenceChunker<S, T, U:Sequence, V:Sequence> {
@@ -47,6 +47,7 @@ export class SequenceChunker<S, T, U:Sequence, V:Sequence> {
   _isOnChunkBoundary: boolean;
   _parent: ?SequenceChunker<T, T, V, V>;
   _current: Array<S>;
+  _derivedSize: number;
   _makeChunk: makeChunkFn;
   _parentMakeChunk: makeChunkFn;
   _boundaryChecker: BoundaryChecker<S>;
@@ -61,6 +62,7 @@ export class SequenceChunker<S, T, U:Sequence, V:Sequence> {
     this._isOnChunkBoundary = false;
     this._parent = null;
     this._current = [];
+    this._derivedSize = 0;
     this._makeChunk = makeChunk;
     this._parentMakeChunk = parentMakeChunk;
     this._boundaryChecker = boundaryChecker;
@@ -76,34 +78,45 @@ export class SequenceChunker<S, T, U:Sequence, V:Sequence> {
     }
 
     // TODO: Only call maxNPrevItems once.
-    const prev =
-      await cursor.maxNPrevItems(this._boundaryChecker.windowSize - 1);
+    const prev = await cursor.maxNPrevItems(this._boundaryChecker.windowSize - 1);
     for (let i = 0; i < prev.length; i++) {
       this._boundaryChecker.write(prev[i]);
     }
 
+    // TODO: This doesn't need to await because it's within the current chunk,
+    // which has already been paged in.
     this._current = await cursor.maxNPrevItems(cursor.indexInChunk);
     this._used = this._current.length > 0;
+
+    // The derived size starts at the full size of the chunk, and in finalizeCursor() isn't
+    // increased. Additional calls to append/skip will affect it.  TODO: I think this is wrong, it
+    // should be using any sort of "derived size" concept. It should be building up the size and
+    // then when chunks are created set that size. Ugh this is complicated.
+    this._derivedSize = cursor.sequence.numLeaves;
   }
 
-  append(item: S) {
+  append(item: S, numLeaves: number) {
     if (this._isOnChunkBoundary) {
       this.createParent();
       this.handleChunkBoundary();
       this._isOnChunkBoundary = false;
     }
     this._current.push(item);
+    this._derivedSize += numLeaves;
     this._used = true;
     if (this._boundaryChecker.write(item)) {
       this.handleChunkBoundary();
     }
   }
 
-  async skip(): Promise<void> {
+  async skip(numLeaves: number): Promise<void> {
     const cursor = notNull(this._cursor);
-
-    if (await cursor.advance() && cursor.indexInChunk === 0) {
-      await this.skipParentIfExists();
+    const numLeaves = cursor.sequence.numLeaves;
+    if (await cursor.advance()) {
+      this._derivedSize -= numLeaves;
+      if (cursor.indexInChunk === 0) {
+        return this.skipParentIfExists();
+      }
     }
   }
 
@@ -130,9 +143,11 @@ export class SequenceChunker<S, T, U:Sequence, V:Sequence> {
       this._isOnChunkBoundary = true;
     } else {
       invariant(this._current.length > 0);
-      const chunk = this._makeChunk(this._current)[0];
-      notNull(this._parent).append(chunk);
+      const chunk = this._makeChunk(this._current, this._derivedSize)[0];
+      // No, this shouldn't be the derived size.
+      notNull(this._parent).append(chunk, this._derivedSize);
       this._current = [];
+      this._derivedSize = 0;
     }
   }
 
@@ -176,7 +191,8 @@ export class SequenceChunker<S, T, U:Sequence, V:Sequence> {
       if (i === 0 || fzr.indexInChunk === 0) {
         await this.skipParentIfExists();
       }
-      this.append(fzr.getCurrent());
+      // numLeaves is 0 because _derivedSize 
+      this.append(fzr.getCurrent(), 0);
       if (!await fzr.advance()) {
         break;
       }

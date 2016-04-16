@@ -24,11 +24,6 @@ export class NomsBlob extends Collection<IndexedSequence<uint8>> {
   getReader(): BlobReader {
     return new BlobReader(this.sequence.newCursorAt(0));
   }
-
-  get length(): number {
-    const seq = this.sequence;
-    return seq.getOffset(seq.items.length - 1) + 1;
-  }
 }
 
 export class BlobReader {
@@ -61,9 +56,9 @@ export class BlobReader {
 }
 
 export class BlobLeafSequence extends IndexedSequence<uint8> {
-  constructor(cs: ?DataStore, items: Uint8Array) {
+  constructor(cs: ?DataStore, items: Uint8Array, numLeaves: number) {
     // $FlowIssue: The super class expects Array<T> but we sidestep that.
-    super(cs, blobType, items);
+    super(cs, blobType, items, 0 /* numLeaves TODO do in serialization */);
   }
 
   getOffset(idx: number): number {
@@ -75,8 +70,8 @@ const blobWindowSize = 64;
 const blobPattern = ((1 << 13) | 0) - 1;
 
 function newBlobLeafChunkFn(cs: ?DataStore = null): makeChunkFn {
-  return (items: Array<uint8>) => {
-    const blobLeaf = new BlobLeafSequence(cs, new Uint8Array(items));
+  return (items: Array<uint8>, numItems: number) => {
+    const blobLeaf = new BlobLeafSequence(cs, new Uint8Array(items), numLeaves);
     const mt = new MetaTuple(blobLeaf, items.length);
     return [mt, blobLeaf];
   };

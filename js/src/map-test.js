@@ -29,7 +29,7 @@ import Ref from './ref.js';
 import type {Type} from './type.js';
 
 const testMapSize = 1000;
-const mapOfNRef = 'sha1-b88cd90f3bd0b826bcd9bf57ea28bff15d1d141a';
+const mapOfNRef = 'sha1-0a67da6a515ec0706bdf9076ef4d488b31d34ed4';
 const smallRandomMapSize = 50;
 const randomMapSize = 500;
 
@@ -94,7 +94,7 @@ suite('BuildMap', () => {
     });
 
     const m = await newMap(kvRefs, tr);
-    assert.strictEqual(m.ref.toString(), 'sha1-8055bd75cd73e9a770123740739532661cec4a86');
+    assert.strictEqual(m.ref.toString(), 'sha1-0bb4fab34276b4483269a96003fe1b2321ff0803');
   });
 
   test('set', async () => {

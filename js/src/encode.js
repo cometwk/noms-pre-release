@@ -96,11 +96,11 @@ export class JsonArrayWriter {
 
   maybeWriteMetaSequence(v: Sequence, t: Type, pkg: ?Package): boolean {
     if (!v.isMeta) {
-      this.write(false);
+      this.writeInt(0);
       return false;
     }
 
-    this.write(true);
+    this.writeInt(42); // TODO: v.nDescendants
     const w2 = new JsonArrayWriter(this._ds);
     const indexType = indexTypeForMetaSequence(t);
     for (let i = 0; i < v.items.length; i++) {

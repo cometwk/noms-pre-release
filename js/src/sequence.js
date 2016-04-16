@@ -10,28 +10,45 @@ import {ValueBase} from './value.js';
 export class Sequence<T> extends ValueBase {
   ds: ?DataStore;
   _type: Type;
-  items: Array<T>;
+  _items: Array<T>;
+  _numLeaves: number;
 
-  constructor(ds: ?DataStore, type: Type, items: Array<T>) {
+  // TODO: "numLeaves" is an inaccurate name because it isn't the number of leaves, it's the odd
+  // little hack that overloads the number of leaves for meta sequences with 0 to indicate a leaf.
+  // TODO: The serialization code should do this, really. Maybe "length" is a bad name here? Because
+  // I want to use "length", but that's being used for the number of items. In fact why do we even
+  // have a length function; it's just "items.length" and items are public.
+  constructor(ds: ?DataStore, type: Type, items: Array<T>, numLeaves: number) {
     super();
     this.ds = ds;
     this._type = type;
-    this.items = items;
+    this._items = items;
+    this._numLeaves = numLeaves;
   }
 
   get type(): Type {
     return this._type;
   }
 
+  get items(): Array<T> {
+    return this._items;
+  }
+
+  get numLeaves(): number {
+    return this._numLeaves;
+  }
+
   get isMeta(): boolean {
     return false;
   }
+
+
 
   getChildSequence(idx: number): Promise<?Sequence> { // eslint-disable-line no-unused-vars
     return Promise.resolve(null);
   }
 
-  get length(): number {
+  get length(): number { // TODO: Delete
     return this.items.length;
   }
 }

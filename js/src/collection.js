@@ -25,6 +25,10 @@ export class Collection<S: Sequence> extends ValueBase {
     return !this.sequence.isMeta && this.sequence.items.length === 0;
   }
 
+  get length(): number {
+    return this.sequence.numLeaves;
+  }
+
   get chunks(): Array<RefValue> {
     const chunks = [];
     const addChunks = this.sequence.isMeta ? (mt: MetaTuple) => {

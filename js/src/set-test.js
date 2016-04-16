@@ -32,7 +32,7 @@ import Ref from './ref.js';
 import type {Type} from './type.js';
 
 const testSetSize = 5000;
-const setOfNRef = 'sha1-54ff8f84b5f39fe2171572922d067257a57c539c';
+const setOfNRef = 'sha1-0e9362216396bdddd46d5929bf4c07776de30a3a';
 const smallRandomSetSize = 200;
 const randomSetSize = 2000;
 
@@ -91,7 +91,7 @@ suite('BuildSet', () => {
     });
 
     const s = await newSet(refs, tr);
-    assert.strictEqual(s.ref.toString(), 'sha1-3ed56cc080690be61c72828e80080ec3507fec65');
+    assert.strictEqual(s.ref.toString(), 'sha1-67b90b057d81c89d9cde677151e7d72d8a57c262');
   });
 
 

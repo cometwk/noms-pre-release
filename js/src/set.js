@@ -23,8 +23,8 @@ const setWindowSize = 1;
 const setPattern = ((1 << 6) | 0) - 1;
 
 function newSetLeafChunkFn<T:valueOrPrimitive>(t: Type, ds: ?DataStore = null): makeChunkFn {
-  return (items: Array<T>) => {
-    const setLeaf = new SetLeafSequence(ds, t, items);
+  return (items: Array<T>, numLeaves: number) => {
+    const setLeaf = new SetLeafSequence(ds, t, items, 0 /* numLeaves TODO go in serialization */);
 
     let indexValue: ?(T | RefValue) = null;
     if (items.length > 0) {

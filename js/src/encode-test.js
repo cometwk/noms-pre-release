@@ -81,7 +81,7 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(ds);
     const blob = await newBlob(new Uint8Array([0x00, 0x01]));
     w.writeTopLevel(blobType, blob);
-    assert.deepEqual([Kind.Blob, false, 'AAE='], w.array);
+    assert.deepEqual([Kind.Blob, '0', 'AAE='], w.array);
   });
 
   test('write list', async () => {
@@ -92,7 +92,7 @@ suite('Encode', () => {
     const tr = makeCompoundType(Kind.List, int32Type);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, [0, 1, 2, 3]));
     w.writeTopLevel(tr, l);
-    assert.deepEqual([Kind.List, Kind.Int32, false, ['0', '1', '2', '3']], w.array);
+    assert.deepEqual([Kind.List, Kind.Int32, '0', ['0', '1', '2', '3']], w.array);
   });
 
   test('write list of value', async () => {
@@ -103,7 +103,7 @@ suite('Encode', () => {
     const tr = makeCompoundType(Kind.List, valueType);
     const l = new NomsList(tr, new ListLeafSequence(ds, tr, ['0', '1', '2', '3']));
     w.writeTopLevel(tr, l);
-    assert.deepEqual([Kind.List, Kind.Value, false, [
+    assert.deepEqual([Kind.List, Kind.Value, '0', [
       Kind.String, '0',
       Kind.String, '1',
       Kind.String, '2',
@@ -123,7 +123,7 @@ suite('Encode', () => {
       new NomsList(tr, new ListLeafSequence(ds, it, [1, 2, 3])),
     ]));
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.List, Kind.List, Kind.Int16, false, [false, ['0'], false,
+    assert.deepEqual([Kind.List, Kind.List, Kind.Int16, '0', ['0', ['0'], '0',
         ['1', '2', '3']]], w.array);
   });
 
@@ -135,7 +135,7 @@ suite('Encode', () => {
     const tr = makeCompoundType(Kind.Set, uint32Type);
     const v = new NomsSet(tr, new SetLeafSequence(ds, tr, [0, 1, 2, 3]));
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.Set, Kind.Uint32, false, ['0', '1', '2', '3']], w.array);
+    assert.deepEqual([Kind.Set, Kind.Uint32, '0', ['0', '1', '2', '3']], w.array);
   });
 
   test('write set of set', async () => {
@@ -151,7 +151,7 @@ suite('Encode', () => {
     ]));
 
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.Set, Kind.Set, Kind.Int32, false, [false, ['0'], false,
+    assert.deepEqual([Kind.Set, Kind.Set, Kind.Int32, '0', ['0', ['0'], '0',
         ['1', '2', '3']]], w.array);
   });
 
@@ -164,7 +164,7 @@ suite('Encode', () => {
     const v = new NomsMap(tr, new MapLeafSequence(ds, tr, [{key: 'a', value: false},
         {key:'b', value:true}]));
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.Map, Kind.String, Kind.Bool, false, ['a', false, 'b', true]], w.array);
+    assert.deepEqual([Kind.Map, Kind.String, Kind.Bool, '0', ['a', false, 'b', true]], w.array);
   });
 
   test('write map of map', async() => {
@@ -180,8 +180,8 @@ suite('Encode', () => {
     const m1 = new NomsMap(kt, new MapLeafSequence(ds, kt, [{key: 'a', value: 0}]));
     const v = new NomsMap(kt, new MapLeafSequence(ds, tr, [{key: m1, value: s}]));
     w.writeTopLevel(tr, v);
-    assert.deepEqual([Kind.Map, Kind.Map, Kind.String, Kind.Int64, Kind.Set, Kind.Bool, false,
-        [false, ['a', '0'], false, [true]]], w.array);
+    assert.deepEqual([Kind.Map, Kind.Map, Kind.String, Kind.Int64, Kind.Set, Kind.Bool, '0',
+        ['0', ['a', '0'], '0', [true]]], w.array);
   });
 
   test('write empty struct', async() => {
@@ -288,12 +288,12 @@ suite('Encode', () => {
     let v = newStruct(type, typeDef, {l: new NomsList(ltr,
           new ListLeafSequence(ds, ltr, ['a', 'b']))});
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', false, ['a', 'b']], w.array);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', '0', ['a', 'b']], w.array);
 
     v = newStruct(type, typeDef, {l: new NomsList(ltr, new ListLeafSequence(ds, ltr, []))});
     w = new JsonArrayWriter(ds);
     w.writeTopLevel(type, v);
-    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', false, []], w.array);
+    assert.deepEqual([Kind.Unresolved, pkgRef.toString(), '0', '0', []], w.array);
   });
 
   test('write struct with struct', async () => {
@@ -347,7 +347,7 @@ suite('Encode', () => {
     const l = new NomsList(listType, new ListLeafSequence(ds, listType, [0, 1, 2]));
 
     w.writeTopLevel(listType, l);
-    assert.deepEqual([Kind.List, Kind.Unresolved, pkgRef.toString(), '0', false, ['0', '1', '2']],
+    assert.deepEqual([Kind.List, Kind.Unresolved, pkgRef.toString(), '0', '0', ['0', '1', '2']],
         w.array);
   });
 
@@ -357,18 +357,18 @@ suite('Encode', () => {
     const w = new JsonArrayWriter(ds);
     const ltr = makeCompoundType(Kind.List, int32Type);
     const r1 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [0, 1]))).targetRef;
-    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [2, 3]))).targetRef;
-    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [4, 5]))).targetRef;
+    const r2 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [2, 3, 4]))).targetRef;
+    const r3 = ds.writeValue(new NomsList(ltr, new ListLeafSequence(ds, ltr, [5]))).targetRef;
     const tuples = [
       new MetaTuple(r1, 2),
-      new MetaTuple(r2, 4),
-      new MetaTuple(r3, 6),
+      new MetaTuple(r2, 3),
+      new MetaTuple(r3, 1),
     ];
     const l = new NomsList(ltr, new IndexedMetaSequence(ds, ltr, tuples));
 
     w.writeTopLevel(ltr, l);
-    assert.deepEqual([Kind.List, Kind.Int32, true, [r1.toString(), '2', r2.toString(), '4',
-        r3.toString(), '6']], w.array);
+    assert.deepEqual([Kind.List, Kind.Int32, '42', [r1.toString(), '2', r2.toString(), '3',
+        r3.toString(), '1']], w.array);
   });
 
   test('write type value', async () => {

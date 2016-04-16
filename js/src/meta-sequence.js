@@ -39,10 +39,16 @@ export class MetaTuple<K> {
     } else {
       const ref = this._sequenceOrRef;
       invariant(ds && ref instanceof Ref);
-      return ds.readValue(ref).then((c: Collection) => c.sequence);
+      return ds.readValue(ref).then((c: Collection) => {
+        const s = c.sequence;
+        invariant(s instanceof Sequence);
+        return this._sequenceOrRef = s;
+      });
     }
   }
 }
+
+
 
 export class IndexedMetaSequence extends IndexedSequence<MetaTuple<number>> {
   offsets: Array<number>;
@@ -180,8 +186,8 @@ export function indexTypeForMetaSequence(t: Type): Type {
 }
 
 export function newOrderedMetaSequenceChunkFn(t: Type, ds: ?DataStore = null): makeChunkFn {
-  return (tuples: Array<MetaTuple>) => {
-    const meta = new OrderedMetaSequence(ds, t, tuples);
+  return (tuples: Array<MetaTuple>, numLeaves: number) => {
+    const meta = new OrderedMetaSequence(ds, t, tuples, numLeaves);
     const lastValue = tuples[tuples.length - 1].value;
     return [new MetaTuple(meta, lastValue), meta];
   };
@@ -198,9 +204,9 @@ export function newOrderedMetaSequenceBoundaryChecker(): BoundaryChecker<MetaTup
 }
 
 export function newIndexedMetaSequenceChunkFn(t: Type, ds: ?DataStore = null): makeChunkFn {
-  return (tuples: Array<MetaTuple>) => {
+  return (tuples: Array<MetaTuple>, numLeaves: number) => {
     const sum = tuples.reduce((l, mt) => l + mt.value, 0);
-    const meta = new IndexedMetaSequence(ds, t, tuples);
+    const meta = new IndexedMetaSequence(ds, t, tuples, numLeaves);
     return [new MetaTuple(meta, sum), meta];
   };
 }

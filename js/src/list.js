@@ -21,8 +21,9 @@ const listWindowSize = 64;
 const listPattern = ((1 << 6) | 0) - 1;
 
 function newListLeafChunkFn<T: valueOrPrimitive>(t: Type, ds: ?DataStore = null): makeChunkFn {
-  return (items: Array<T>) => {
-    const listLeaf = new ListLeafSequence(ds, t, items);
+  return (items: Array<T>, numLeaves: number) => {
+    invariant(numLeaves === items.length);
+    const listLeaf = new ListLeafSequence(ds, t, items, 0 /* numLeaves TODO go in serialization */);
     const mt = new MetaTuple(listLeaf, items.length);
     return [mt, listLeaf];
   };
@@ -117,11 +118,6 @@ export class NomsList<T: valueOrPrimitive> extends Collection<IndexedSequence> {
       return Promise.resolve([]);
     }
     return this.sequence.range(start, end);
-  }
-
-  get length(): number {
-    const seq = this.sequence;
-    return seq.getOffset(seq.items.length - 1) + 1;
   }
 }
 

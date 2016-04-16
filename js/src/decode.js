@@ -247,9 +247,9 @@ export class JsonArrayReader {
     // TODO: Verify read values match tagged kinds.
     switch (t.kind) {
       case Kind.Blob: {
-        const isMeta = this.readBool();
+        const nDescendants = this.readInt();
         let sequence;
-        if (isMeta) {
+        if (nDescendants > 0) {
           const r2 = new JsonArrayReader(this.readArray(), this._ds);
           sequence = r2.readMetaSequence(t, pkg);
           invariant(sequence instanceof IndexedMetaSequence);
@@ -280,17 +280,17 @@ export class JsonArrayReader {
         return this.readValueWithoutTag(t2, pkg);
       }
       case Kind.List: {
-        const isMeta = this.readBool();
+        const nDescendants = this.readInt();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
-        const sequence = isMeta ?
+        const sequence = nDescendants > 0 ?
             r2.readMetaSequence(t, pkg) :
             r2.readListLeafSequence(t, pkg);
         return new NomsList(t, sequence);
       }
       case Kind.Map: {
-        const isMeta = this.readBool();
+        const nDescendants = this.readInt();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
-        const sequence = isMeta ?
+        const sequence = nDescendants > 0 ?
           r2.readMetaSequence(t, pkg) :
           r2.readMapLeafSequence(t, pkg);
         return new NomsMap(t, sequence);
@@ -300,9 +300,9 @@ export class JsonArrayReader {
       case Kind.Ref:
         return this.readRefValue(t);
       case Kind.Set: {
-        const isMeta = this.readBool();
+        const nDescendants = this.readInt();
         const r2 = new JsonArrayReader(this.readArray(), this._ds);
-        const sequence = isMeta ?
+        const sequence = nDescendants > 0 ?
           r2.readMetaSequence(t, pkg) :
           r2.readSetLeafSequence(t, pkg);
         return new NomsSet(t, sequence);
