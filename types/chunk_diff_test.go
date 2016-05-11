@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const chunksDiffTestSize = 500
+const chunksDiffTestSize = 50000
 
 func assertDiffIsConsistent(t *testing.T, vr ValueReader, rootA, rootB Ref) {
 	assert := assert.New(t)
@@ -36,7 +36,7 @@ func assertDiffIsConsistent(t *testing.T, vr ValueReader, rootA, rootB Ref) {
 	graphA := refsToStringSet(getChunkGraph(rootA))
 	graphB := refsToStringSet(getChunkGraph(rootB))
 
-	diffA, diffB := ChunksDiff(vr, rootA, rootB)
+	diffA, diffB := ChunksDiff(vr, vr, rootA, rootB)
 	onlyA, onlyB := refsToStringSet(diffA), refsToStringSet(diffB)
 
 	for r, _ := range onlyA {
@@ -77,12 +77,7 @@ func numsFromTo(from, to uint64) (res []Value) {
 func testDiffSplice(t *testing.T, idx, del uint64, vals []Value) {
 	vr := NewTestValueStore()
 	list := NewList(numsFromTo(0, chunksDiffTestSize)...)
-
-	splice := list.Slice(0, idx).Append(vals...)
-	list.Slice(idx+del, list.Len()).IterAll(func(v Value, i uint64) {
-		splice = splice.Append(v)
-	})
-
+	splice := list.Remove(idx, idx+del).Insert(idx, vals...)
 	assertDiffIsConsistent(t, vr, vr.WriteValue(list), vr.WriteValue(splice))
 }
 

@@ -83,7 +83,7 @@ func (ds *Dataset) pull(source datas.Database, sourceRef types.Ref, concurrency 
 	}
 
 	if topDown {
-		datas.CopyMissingChunksP(source, sink.Store().(*datas.LocalDatabase), sourceRef, concurrency)
+		datas.CopyMissingChunksP(source, sink.Store(), sourceRef, sinkHeadRef, concurrency)
 	} else {
 		datas.CopyReachableChunksP(source, sink.Store(), sourceRef, sinkHeadRef, concurrency)
 	}

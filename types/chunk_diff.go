@@ -54,10 +54,12 @@ func (s refSlice) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func ChunksDiff(vr ValueReader, rootA, rootB Ref) ([]Ref, []Ref) {
+// TODO: option to exclude one of the result tuples (e.g. might only care about chunks in rootA that aren't in rootB).
+// TODO: support concurrency. The JS implementation will use Promises; can we use Go to implement something similar?
+func ChunksDiff(vrA, vrB ValueReader, rootA, rootB Ref) ([]Ref, []Ref) {
 
 	// TODO: comment.
-	commit := func(onlyIn refSlice, reachable *refHeap, r Ref) refSlice {
+	commit := func(vr ValueReader, onlyIn refSlice, reachable *refHeap, r Ref) refSlice {
 		if chunks := r.TargetValue(vr).Chunks(); chunks != nil {
 			for _, chunk := range chunks {
 				heap.Push(reachable, chunk)
@@ -67,9 +69,9 @@ func ChunksDiff(vr ValueReader, rootA, rootB Ref) ([]Ref, []Ref) {
 	}
 
 	// TODO: comment.
-	syncTo := func(onlyIn refSlice, reachable *refHeap, height uint64) refSlice {
+	syncTo := func(vr ValueReader, onlyIn refSlice, reachable *refHeap, height uint64) refSlice {
 		for reachable.Len() > 0 && reachable.Head().Height() > height {
-			onlyIn = commit(onlyIn, reachable, heap.Pop(reachable).(Ref))
+			onlyIn = commit(vr, onlyIn, reachable, heap.Pop(reachable).(Ref))
 		}
 		return onlyIn
 	}
@@ -123,16 +125,16 @@ func ChunksDiff(vr ValueReader, rootA, rootB Ref) ([]Ref, []Ref) {
 		heightB := reachableFromB[0].Height()
 
 		if heightA > heightB {
-			onlyInA = syncTo(onlyInA, &reachableFromA, heightB)
+			onlyInA = syncTo(vrA, onlyInA, &reachableFromA, heightB)
 		} else if heightB > heightA {
-			onlyInB = syncTo(onlyInB, &reachableFromB, heightA)
+			onlyInB = syncTo(vrB, onlyInB, &reachableFromB, heightA)
 		} else {
 			newRefsA, newRefsB := diffRefSlices(popTo(&reachableFromA, heightA-1), popTo(&reachableFromB, heightB-1))
 			for _, r := range newRefsA {
-				onlyInA = commit(onlyInA, &reachableFromA, r)
+				onlyInA = commit(vrA, onlyInA, &reachableFromA, r)
 			}
 			for _, r := range newRefsB {
-				onlyInB = commit(onlyInB, &reachableFromB, r)
+				onlyInB = commit(vrB, onlyInB, &reachableFromB, r)
 			}
 		}
 	}

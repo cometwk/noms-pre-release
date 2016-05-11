@@ -268,7 +268,9 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes ref.RefSlice, hints types.H
 			errChan := make(chan error)
 			go func() {
 				gw := gzip.NewWriter(pw)
+				fmt.Println("extracting chunks")
 				err := bhcs.unwrittenPuts.ExtractChunks(hashes[0], hashes[len(hashes)-1], gw)
+				fmt.Println("finished chunks")
 				// The ordering of these is important. Close the gzipper to flush data to pw, then close pw so that the HTTP stack which is reading from serializedChunks knows it has everything, and only THEN block on errChan.
 				gw.Close()
 				pw.Close()
@@ -284,7 +286,9 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes ref.RefSlice, hints types.H
 				"Content-Type":     {"application/octet-stream"},
 			})
 
+			fmt.Println("sending http do")
 			res, err = bhcs.httpClient.Do(req)
+			fmt.Println("done")
 			d.Exp.NoError(err)
 			d.Exp.NoError(<-errChan)
 			defer closeResponse(res)

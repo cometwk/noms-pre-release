@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"github.com/attic-labs/noms/chunks"
 	"github.com/attic-labs/noms/d"
 )
@@ -28,18 +29,25 @@ func (vbs *ValidatingBatchingSink) Prepare(hints Hints) {
 // Enequeue adds a Chunk to the queue of Chunks waiting to be Put into vbs' backing ChunkStore. The instance keeps an internal buffer of Chunks, spilling to the ChunkStore when the buffer is full. If an attempt to Put Chunks fails, this method returns the BackpressureError from the underlying ChunkStore.
 func (vbs *ValidatingBatchingSink) Enqueue(c chunks.Chunk) chunks.BackpressureError {
 	r := c.Ref()
+	fmt.Println("checking is present")
 	if vbs.vs.isPresent(r) {
+		fmt.Println("wtf")
 		return nil
 	}
+	fmt.Println("decoding")
 	v := DecodeChunk(c, vbs.vs)
 	d.Exp.NotNil(v, "Chunk with hash %s failed to decode", r)
 	vbs.vs.checkChunksInCache(v)
+	fmt.Println("check chunk in cache")
 	vbs.vs.set(r, hintedChunk{v.Type(), r})
+	fmt.Println("thing7y")
 
 	vbs.batch[vbs.count] = c
 	vbs.count++
 	if vbs.count == batchSize {
+		fmt.Println("flushing")
 		return vbs.Flush()
+		fmt.Println("did flush")
 	}
 	return nil
 }

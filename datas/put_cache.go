@@ -3,6 +3,7 @@ package datas
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -127,6 +128,7 @@ func (p *unwrittenPutCache) ExtractChunks(start, end ref.Ref, w io.Writer) error
 	iter := p.orderedChunks.NewIterator(iterRange, nil)
 	defer iter.Release()
 	for iter.Next() {
+		fmt.Println("writing chunk")
 		_, err := w.Write(iter.Value())
 		if err != nil {
 			return err
