@@ -67,8 +67,6 @@ func (wc wc) Close() error {
 }
 
 func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs chunks.ChunkStore) {
-	fmt.Println("handling write value")
-
 	hashes := ref.RefSlice{}
 	err := d.Try(func() {
 		d.Exp.Equal("POST", req.Method)
@@ -82,22 +80,17 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 		go chunks.DeserializeToChan(reader, chunkChan)
 		var bpe chunks.BackpressureError
 		for c := range chunkChan {
-			fmt.Println("got chunk", c.Ref().String())
 			if bpe == nil {
-				fmt.Println("enquing chunk")
 				bpe = vbs.Enqueue(c)
-				fmt.Println("did enquoe chunk")
 			}
 			// If a previous Enqueue() errored, we still need to drain chunkChan
 			// TODO: what about having DeserializeToChan take a 'done' channel to stop it?
 			hashes = append(hashes, c.Ref())
 		}
 		if bpe == nil {
-			fmt.Println("flushing")
 			bpe = vbs.Flush()
 		}
 		if bpe != nil {
-			fmt.Println("some error", bpe)
 			w.WriteHeader(httpStatusTooManyRequests)
 			w.Header().Add("Content-Type", "application/octet-stream")
 			writer := respWriter(req, w)
@@ -105,7 +98,6 @@ func HandleWriteValue(w http.ResponseWriter, req *http.Request, ps URLParams, cs
 			serializeHashes(writer, bpe.AsHashes())
 			return
 		}
-		fmt.Println("done")
 		w.WriteHeader(http.StatusCreated)
 	})
 
@@ -136,7 +128,6 @@ func HandleGetRefs(w http.ResponseWriter, req *http.Request, ps URLParams, cs ch
 		refs := make([]ref.Ref, len(refStrs))
 		for idx, refStr := range refStrs {
 			refs[idx] = ref.Parse(refStr)
-			fmt.Println("getting a ref", refStr)
 		}
 
 		w.Header().Add("Content-Type", "application/octet-stream")

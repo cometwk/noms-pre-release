@@ -21,17 +21,48 @@ func CopyMissingChunksP(source, sink Database, sourceRef, sinkRef types.Ref, con
 
 // CopyReachableChunksP copies to |sink| all chunks reachable from (and including) |r|, but that are not in the subtree rooted at |exclude|
 func CopyReachableChunksP(source, sink Database, sourceRef, sinkRef types.Ref, concurrency int) {
-	missing, moar := types.ChunksDiff(source, sink, sourceRef, sinkRef)
-	fmt.Println("missing", len(missing), "chunks, there were", len(moar), "more")
+
+	type wroteMap map[string]struct{}
+
+	var printChunks func(vr types.ValueReader, val types.Value, wrote wroteMap)
+	printChunks = func(vr types.ValueReader, val types.Value, wrote wroteMap) {
+		chunks := val.Chunks()
+		if chunks == nil {
+			return
+		}
+
+		for _, r := range chunks {
+			str := r.TargetRef().String()
+			if _, ok := wrote[str]; ok {
+				continue
+			} else {
+				wrote[str] = struct{}{}
+			}
+
+			fmt.Println(str, "^", r.Height())
+			printChunks(vr, r.TargetValue(vr), wrote)
+		}
+	}
+
+	fmt.Println("source:")
+	fmt.Println(sourceRef.TargetRef(), "^", sourceRef.Height())
+	printChunks(source, sourceRef.TargetValue(source), wroteMap{})
+	fmt.Println()
+	fmt.Println("sink:")
+	fmt.Println(sinkRef.TargetRef(), "^", sinkRef.Height())
+	printChunks(sink, sinkRef.TargetValue(sink), wroteMap{})
+	fmt.Println()
+
+	missing, _ := types.ChunksDiff(source, sink, sourceRef, sinkRef)
+	fmt.Println("missing", len(missing), "chunks:")
+
 	// Copy in reverse order to copy in reverse height order.
 	// TODO: need assertions.
 	for i := len(missing) - 1; i >= 0; i-- {
 		r := missing[i]
-		fmt.Println("writing ref", r.TargetRef().String(), "of height", r.Height())
+		fmt.Println(r.TargetRef().String(), "^", r.Height())
 		sink.batchStore().SchedulePut(source.batchStore().Get(r.TargetRef()), types.Hints{})
 	}
-	fmt.Println("flushing")
-	sink.batchStore().Flush()
 
 	/*
 		excludeRefs := map[ref.Ref]bool{}

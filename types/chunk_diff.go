@@ -4,21 +4,21 @@ package types
 
 import (
 	"container/heap"
+	"fmt"
 	"sort"
 )
 
 // refHeap implements heap.Interface (which includes sort.Interface) as a height based priority queue.
 type refHeap []Ref
 
-func (h refHeap) Head() Ref {
-	return h[0]
-}
-
 func (h refHeap) Len() int {
 	return len(h)
 }
 
 func (h refHeap) Less(i, j int) bool {
+	if h[i].Height() == h[ij].Height() {
+		return h[i].TargetRef().Less(h[j].TargetRef())
+	}
 	// > because we want the larger heights to be at the start of the queue.
 	return h[i].Height() > h[j].Height()
 }
@@ -60,6 +60,7 @@ func ChunksDiff(vrA, vrB ValueReader, rootA, rootB Ref) ([]Ref, []Ref) {
 
 	// TODO: comment.
 	commit := func(vr ValueReader, onlyIn refSlice, reachable *refHeap, r Ref) refSlice {
+		// TODO: need a RefPromise abstraction?
 		if chunks := r.TargetValue(vr).Chunks(); chunks != nil {
 			for _, chunk := range chunks {
 				heap.Push(reachable, chunk)
@@ -70,7 +71,7 @@ func ChunksDiff(vrA, vrB ValueReader, rootA, rootB Ref) ([]Ref, []Ref) {
 
 	// TODO: comment.
 	syncTo := func(vr ValueReader, onlyIn refSlice, reachable *refHeap, height uint64) refSlice {
-		for reachable.Len() > 0 && reachable.Head().Height() > height {
+		for reachable.Len() > 0 && (*reachable)[0].Height() > height {
 			onlyIn = commit(vr, onlyIn, reachable, heap.Pop(reachable).(Ref))
 		}
 		return onlyIn
@@ -78,7 +79,7 @@ func ChunksDiff(vrA, vrB ValueReader, rootA, rootB Ref) ([]Ref, []Ref) {
 
 	// TODO: comment.
 	popTo := func(reachable *refHeap, height uint64) (res refSlice) {
-		for reachable.Len() > 0 && reachable.Head().Height() > height {
+		for reachable.Len() > 0 && (*reachable)[0].Height() > height {
 			res = append(res, heap.Pop(reachable).(Ref))
 		}
 		return
@@ -109,6 +110,7 @@ func ChunksDiff(vrA, vrB ValueReader, rootA, rootB Ref) ([]Ref, []Ref) {
 
 		onlyInA = append(onlyInA, sliceA[idxA:]...)
 		onlyInB = append(onlyInB, sliceB[idxB:]...)
+
 		return onlyInA, onlyInB
 	}
 
@@ -120,26 +122,39 @@ func ChunksDiff(vrA, vrB ValueReader, rootA, rootB Ref) ([]Ref, []Ref) {
 	heap.Push(&reachableFromA, rootA)
 	heap.Push(&reachableFromB, rootB)
 
-	for len(reachableFromA) > 0 && len(reachableFromB) > 0 {
+	refs := func(rs refHeap) (ss []string) {
+		for _, r := range rs {
+			ss = append(ss, r.TargetRef().String())
+		}
+		return
+	}
+
+	for len(reachableFromA) > 0 || len(reachableFromB) > 0 {
 		heightA := reachableFromA[0].Height()
 		heightB := reachableFromB[0].Height()
+
+		fmt.Printf("A: %s (%d), B: %s (%d)\n", refs(reachableFromA), heightA, refs(reachableFromB), heightB)
 
 		if heightA > heightB {
 			onlyInA = syncTo(vrA, onlyInA, &reachableFromA, heightB)
 		} else if heightB > heightA {
 			onlyInB = syncTo(vrB, onlyInB, &reachableFromB, heightA)
 		} else {
-			newRefsA, newRefsB := diffRefSlices(popTo(&reachableFromA, heightA-1), popTo(&reachableFromB, heightB-1))
+			newRefsA, newRefsB, inBoth := diffRefSlices(popTo(&reachableFromA, heightA-1), popTo(&reachableFromB, heightB-1))
 			for _, r := range newRefsA {
 				onlyInA = commit(vrA, onlyInA, &reachableFromA, r)
 			}
 			for _, r := range newRefsB {
 				onlyInB = commit(vrB, onlyInB, &reachableFromB, r)
 			}
+			for _, r := range inBoth {
+				removeWithChildren()
+			}
 		}
 	}
 
 	onlyInA = append(onlyInA, reachableFromA...)
 	onlyInB = append(onlyInB, reachableFromB...)
+
 	return []Ref(onlyInA), []Ref(onlyInB)
 }

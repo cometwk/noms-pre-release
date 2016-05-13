@@ -106,17 +106,13 @@ func (lvs *ValueStore) isPresent(r ref.Ref) (present bool) {
 
 func (lvs *ValueStore) check(r ref.Ref) chunkCacheEntry {
 	lvs.mu.Lock()
-	defer func() {
-		lvs.mu.Unlock()
-	}()
+	defer lvs.mu.Unlock()
 	return lvs.cache[r]
 }
 
 func (lvs *ValueStore) set(r ref.Ref, entry chunkCacheEntry) {
 	lvs.mu.Lock()
-	defer func() {
-		lvs.mu.Unlock()
-	}()
+	defer lvs.mu.Unlock()
 	lvs.cache[r] = entry
 }
 
@@ -131,7 +127,7 @@ func (lvs *ValueStore) checkChunksInCache(v Value) map[ref.Ref]struct{} {
 	for _, reachable := range v.Chunks() {
 		entry := lvs.check(reachable.TargetRef())
 		if entry == nil || !entry.Present() {
-			d.Exp.Fail("Attempted to write Value containing Ref to non-existent object.", "Value at %s contains ref %s, which points to a non-existent Value.", v.Ref(), reachable.TargetRef())
+			d.Exp.Fail("Attempted to write Value containing Ref to non-existent object.", "%s\n, contains ref %s, which points to a non-existent Value.", EncodedValueWithTags(v), reachable.TargetRef())
 		}
 		if hint := entry.Hint(); !hint.IsEmpty() {
 			hints[hint] = struct{}{}

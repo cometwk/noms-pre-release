@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"sync"
 
@@ -110,9 +109,7 @@ func Deserialize(reader io.Reader, cs ChunkSink, rateLimit chan struct{}) {
 // DeserializeToChan reads off of |reader| until EOF, sending chunks to chunkChan in the order they are read.
 func DeserializeToChan(reader io.Reader, chunkChan chan<- Chunk) {
 	for {
-		fmt.Println("deser chunk")
 		c := deserializeChunk(reader)
-		fmt.Println("done deser chunk")
 		if c.IsEmpty() {
 			break
 		}
