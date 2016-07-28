@@ -5,8 +5,6 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -19,7 +17,6 @@ import (
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/go/util/orderedparallel"
 	"github.com/attic-labs/noms/go/util/outputpager"
 	"github.com/mgutz/ansi"
 )
@@ -64,7 +61,11 @@ func runLog(args []string) int {
 	if err != nil {
 		d.CheckErrorNoUsage(err)
 	}
-	defer database.Close()
+	defer func() {
+		fmt.Fprintln(os.Stderr, "database.Close()...")
+		database.Close()
+		fmt.Fprintln(os.Stderr, " did database.Close()")
+	}()
 
 	if value == nil {
 		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
@@ -83,26 +84,33 @@ func runLog(args []string) int {
 		maxCommits = math.MaxInt32
 	}
 
-	inChan := make(chan interface{}, parallelism)
-	outChan := orderedparallel.New(inChan, func(node interface{}) interface{} {
-		buff := &bytes.Buffer{}
-		printCommit(node.(LogNode), buff, database)
-		return buff.Bytes()
-	}, parallelism)
-
-	go func() {
-		for ln, ok := iter.Next(); ok && displayed < maxCommits; ln, ok = iter.Next() {
-			inChan <- ln
-			displayed++
-		}
-		close(inChan)
-	}()
-
-	w := bufio.NewWriter(os.Stdout)
-	for commitBuff := range outChan {
-		io.Copy(w, bytes.NewReader(commitBuff.([]byte)))
+	for ln, ok := iter.Next(); ok && displayed < maxCommits; ln, ok = iter.Next() {
+		printCommit(ln, os.Stdout, database)
+		displayed++
 	}
-	w.Flush()
+
+	/*
+		inChan := make(chan interface{}, parallelism)
+		outChan := orderedparallel.New(inChan, func(node interface{}) interface{} {
+			buff := &bytes.Buffer{}
+			printCommit(node.(LogNode), buff, database)
+			return buff.Bytes()
+		}, parallelism)
+
+		go func() {
+			for ln, ok := iter.Next(); ok && displayed < maxCommits; ln, ok = iter.Next() {
+				inChan <- ln
+				displayed++
+			}
+			close(inChan)
+		}()
+
+		w := bufio.NewWriter(os.Stdout)
+		for commitBuff := range outChan {
+			io.Copy(w, bytes.NewReader(commitBuff.([]byte)))
+		}
+		w.Flush()
+	*/
 
 	if waitChan != nil {
 		os.Stdout.Close()

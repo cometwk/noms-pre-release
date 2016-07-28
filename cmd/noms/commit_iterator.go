@@ -50,7 +50,7 @@ func (iter *CommitIterator) Next() (LogNode, bool) {
 	branches := branchList{}
 	parents := commitRefsFromSet(br.commit.Get(datas.ParentsField).(types.Set))
 	for _, p := range parents {
-		b := branch{cr: p, commit: iter.db.ReadValue(p.TargetHash()).(types.Struct)}
+		b := branch{cr: p, commit: p.TargetValue(iter.db).(types.Struct)}
 		branches = append(branches, b)
 	}
 	iter.branches = iter.branches.Splice(col, 1, branches...)

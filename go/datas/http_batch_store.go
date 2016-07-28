@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -106,7 +107,11 @@ func (bhcs *httpBatchStore) Flush() {
 func (bhcs *httpBatchStore) Close() (e error) {
 	close(bhcs.finishedChan)
 	bhcs.unwrittenPuts.Destroy()
+
+	fmt.Fprintln(os.Stderr, "requestWg.Wait()...")
 	bhcs.requestWg.Wait()
+	fmt.Fprintln(os.Stderr, " did requestWg.Wait()")
+
 	bhcs.workerWg.Wait()
 
 	close(bhcs.flushChan)
@@ -123,6 +128,7 @@ func (bhcs *httpBatchStore) Get(h hash.Hash) chunks.Chunk {
 	}
 
 	ch := make(chan chunks.Chunk)
+	fmt.Fprintln(os.Stderr, "Get:", h.String())
 	bhcs.requestWg.Add(1)
 	bhcs.getQueue <- chunks.NewGetRequest(h, ch)
 	return <-ch
@@ -138,6 +144,7 @@ func (bhcs *httpBatchStore) Has(h hash.Hash) bool {
 	}
 
 	ch := make(chan bool)
+	fmt.Fprintln(os.Stderr, "Has:", h.String())
 	bhcs.requestWg.Add(1)
 	bhcs.hasQueue <- chunks.NewHasRequest(h, ch)
 	return <-ch
@@ -197,6 +204,9 @@ func (bhcs *httpBatchStore) sendReadRequests(req chunks.ReadRequest, queue <-cha
 	bhcs.rateLimit <- struct{}{}
 	go func() {
 		defer func() {
+			for h, _ := range hashes {
+				fmt.Fprintln(os.Stderr, "Got:", h.String())
+			}
 			bhcs.requestWg.Add(-count)
 			batch.Close()
 		}()
@@ -313,6 +323,7 @@ func (bhcs *httpBatchStore) SchedulePut(c chunks.Chunk, refHeight uint64, hints 
 		return
 	}
 
+	fmt.Fprintln(os.Stderr, "Put:", c.Hash().String())
 	bhcs.requestWg.Add(1)
 	bhcs.writeQueue <- writeRequest{c.Hash(), hints, false}
 }
@@ -331,6 +342,7 @@ func (bhcs *httpBatchStore) batchPutRequests() {
 		handleRequest := func(wr writeRequest) {
 			if !wr.justHints {
 				if hashes.Has(wr.hash) {
+					fmt.Fprintln(os.Stderr, "Already:", wr.hash.String())
 					bhcs.requestWg.Done() // Already have a put enqueued for wr.hash.
 				} else {
 					hashes.Insert(wr.hash)
@@ -378,6 +390,9 @@ func (bhcs *httpBatchStore) sendWriteRequests(hashes hash.HashSet, hints types.H
 		defer func() {
 			<-bhcs.rateLimit
 			bhcs.unwrittenPuts.Clear(hashes)
+			for h, _ := range hashes {
+				fmt.Fprintln(os.Stderr, "Did:", h.String())
+			}
 			bhcs.requestWg.Add(-len(hashes))
 		}()
 

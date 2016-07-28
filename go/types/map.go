@@ -63,7 +63,7 @@ func (m Map) Diff(last Map, changes chan<- ValueChanged, closeChan <-chan struct
 	if m.Equals(last) {
 		return
 	}
-	orderedSequenceDiffBest(last.seq, m.seq, changes, closeChan)
+	orderedSequenceDiffLeftRight(last.seq, m.seq, changes, closeChan)
 }
 
 // Collection interface
