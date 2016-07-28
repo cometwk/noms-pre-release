@@ -34,7 +34,7 @@ func (s Set) Diff(last Set, changes chan<- ValueChanged, closeChan <-chan struct
 	if s.Equals(last) {
 		return
 	}
-	orderedSequenceDiffLeftRight(last.seq, s.seq, changes, closeChan)
+	orderedSequenceDiffBest(last.seq, s.seq, changes, closeChan)
 }
 
 // Collection interface

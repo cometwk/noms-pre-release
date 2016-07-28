@@ -108,9 +108,9 @@ func (bhcs *httpBatchStore) Close() (e error) {
 	close(bhcs.finishedChan)
 	bhcs.unwrittenPuts.Destroy()
 
-	fmt.Fprintln(os.Stderr, "requestWg.Wait()...")
+	fmt.Fprintln(os.Stderr, "*** requestWg.Wait()...")
 	bhcs.requestWg.Wait()
-	fmt.Fprintln(os.Stderr, " did requestWg.Wait()")
+	fmt.Fprintln(os.Stderr, "*** did requestWg.Wait()")
 
 	bhcs.workerWg.Wait()
 
@@ -128,7 +128,7 @@ func (bhcs *httpBatchStore) Get(h hash.Hash) chunks.Chunk {
 	}
 
 	ch := make(chan chunks.Chunk)
-	fmt.Fprintln(os.Stderr, "Get:", h.String())
+	//fmt.Fprintln(os.Stderr, "Get:", h.String())
 	bhcs.requestWg.Add(1)
 	bhcs.getQueue <- chunks.NewGetRequest(h, ch)
 	return <-ch
@@ -204,9 +204,11 @@ func (bhcs *httpBatchStore) sendReadRequests(req chunks.ReadRequest, queue <-cha
 	bhcs.rateLimit <- struct{}{}
 	go func() {
 		defer func() {
-			for h, _ := range hashes {
-				fmt.Fprintln(os.Stderr, "Got:", h.String())
-			}
+			/*
+				for h, _ := range hashes {
+					fmt.Fprintln(os.Stderr, "Got:", h.String())
+				}
+			*/
 			bhcs.requestWg.Add(-count)
 			batch.Close()
 		}()

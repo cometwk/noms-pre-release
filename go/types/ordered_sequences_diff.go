@@ -5,6 +5,10 @@
 package types
 
 import (
+	"fmt"
+	"os"
+	"sync"
+
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/util/functions"
 )
@@ -42,11 +46,28 @@ func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, chan
 	lrCloseChan := make(chan struct{}, 1)
 	tdCloseChan := make(chan struct{}, 1)
 
+	// Use a WaitGroup to guarantee all goroutines have terminated by the end of this function.
+	wg := &sync.WaitGroup{}
+	defer func() {
+		fmt.Fprintln(os.Stderr, "*** Best defer Wait()")
+		wg.Wait()
+		fmt.Fprintln(os.Stderr, "***  did Best defer Wait()")
+	}()
+
+	wg.Add(2)
 	go func() {
+		defer func() {
+			fmt.Fprintln(os.Stderr, "*** LR Done()")
+			wg.Done()
+		}()
 		orderedSequenceDiffLeftRight(last, current, lrChanges, lrCloseChan)
 		close(lrChanges)
 	}()
 	go func() {
+		defer func() {
+			fmt.Fprintln(os.Stderr, "*** TD Done()")
+			wg.Done()
+		}()
 		orderedSequenceDiffTopDown(last, current, tdChanges, tdCloseChan)
 		close(tdChanges)
 	}()
@@ -60,27 +81,36 @@ func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, chan
 			// The buffer size of 1 makes these non-blocking.
 			lrCloseChan <- struct{}{}
 			tdCloseChan <- struct{}{}
+			fmt.Fprintln(os.Stderr, "*** Exiting: closeChan was closed")
 			return false
 		case c, ok := <-lrChanges:
 			if !ok {
 				// Left-right diff completed, try to stop top-down. The close chan has a buffer size of 1, so it won't block if it already finished.
 				tdCloseChan <- struct{}{}
+				fmt.Fprintln(os.Stderr, "*** Exiting: LR diff completed")
 				return true
 			}
 			lrChangeCount++
 			if !sendChange(changes, closeChan, c) {
+				fmt.Fprintln(os.Stderr, "*** Exiting: LR diff failed to send")
+				lrCloseChan <- struct{}{}
+				tdCloseChan <- struct{}{}
 				return false
 			}
 		case c, ok := <-tdChanges:
 			if !ok {
 				// Top-down diff completed, try to stop left-right. The close chan has a buffer size of 1, so it won't block if it already finished.
 				lrCloseChan <- struct{}{}
+				fmt.Fprintln(os.Stderr, "*** Exiting: TD diff completed")
 				return true
 			}
 			tdChangeCount++
 			if tdChangeCount > lrChangeCount {
 				// Top-down changes have overtaken left-right changes.
 				if !sendChange(changes, closeChan, c) {
+					fmt.Fprintln(os.Stderr, "*** Exiting: TD diff failed to send")
+					lrCloseChan <- struct{}{}
+					tdCloseChan <- struct{}{}
 					return false
 				}
 				lrCloseChan <- struct{}{}
@@ -91,9 +121,14 @@ func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, chan
 
 	for c := range tdChanges {
 		if !sendChange(changes, closeChan, c) {
+			lrCloseChan <- struct{}{}
+			tdCloseChan <- struct{}{}
+			fmt.Fprintln(os.Stderr, "*** Exiting: final changes failed to send")
 			return false
 		}
 	}
+
+	fmt.Fprintln(os.Stderr, "*** Exiting: success")
 	return true
 }
 
