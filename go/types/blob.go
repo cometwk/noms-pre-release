@@ -178,18 +178,23 @@ func NewStreamingBlob(r io.Reader, vrw ValueReadWriter) Blob {
 	}
 
 	input := make(chan interface{}, 16)
-	output := orderedparallel.New(input, func(item interface{}) interface{} {
-		cp := item.([]byte)
-		col, key, numLeaves := chunkBlobLeaf(vrw, cp)
-		var ref Ref
-		if vrw != nil {
-			ref = vrw.WriteValue(col)
-			col = nil
-		} else {
-			ref = NewRef(col)
-		}
-		return newMetaTuple(ref, key, numLeaves, col)
-	}, 16)
+	output := make(chan interface{})
+
+	go func() {
+		orderedparallel.New(input, output, func(item interface{}) interface{} {
+			cp := item.([]byte)
+			col, key, numLeaves := chunkBlobLeaf(vrw, cp)
+			var ref Ref
+			if vrw != nil {
+				ref = vrw.WriteValue(col)
+				col = nil
+			} else {
+				ref = NewRef(col)
+			}
+			return newMetaTuple(ref, key, numLeaves, col)
+		}, 16)
+		close(output)
+	}()
 
 	makeChunk := func() {
 		cp := make([]byte, offset)

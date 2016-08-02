@@ -14,29 +14,34 @@ import (
 type ProcessFn func(in interface{}) (out interface{})
 
 // Creates a pool of |parallelism| goroutines to process values off of |input| by calling |fn| and guarentees that results of each call will be sent on |out| in the order the corresponding input was received.
-func New(input chan interface{}, fn ProcessFn, parallelism int) chan interface{} {
+func New(input <-chan interface{}, out chan<- interface{}, fn ProcessFn, parallelism int) {
 	d.Chk.True(parallelism > 0)
 
-	mu := &sync.Mutex{}
+	finChan := make(chan struct{})
+	errChan := make(chan interface{})
 	inCount := uint(0)
 	outCount := uint(0)
+	workCh := make(chan workItem)
 
-	wq := make(chan workItem)
+	wg := &sync.WaitGroup{}
+	wg.Add(1 + parallelism)
 	go func() {
+		wg.Wait()
+		finChan <- struct{}{}
+	}()
+
+	go func() {
+		defer wg.Done()
 		for in := range input {
-			wq <- workItem{inCount, in}
+			workCh <- workItem{inCount, in}
 			inCount++
 		}
-		close(wq)
+		close(workCh)
 	}()
 
 	outHeap := &workQueue{}
-	out := make(chan interface{})
 
 	insertAndProcessHeap := func(item workItem) {
-		mu.Lock()
-		defer mu.Unlock()
-
 		heap.Push(outHeap, item)
 		for outHeap.Peek().order == outCount {
 			top := heap.Pop(outHeap).(workItem)
@@ -47,21 +52,25 @@ func New(input chan interface{}, fn ProcessFn, parallelism int) chan interface{}
 
 	for i := 0; i < parallelism; i++ {
 		go func() {
-			for item := range wq {
+			defer func() {
+				if r := recover(); r == nil {
+					wg.Done()
+				} else {
+					errChan <- r
+				}
+			}()
+			for item := range workCh {
 				item.data = fn(item.data)
 				insertAndProcessHeap(item)
 			}
-
-			mu.Lock()
-			if outCount == inCount {
-				outCount++ // prevent channel from being closed twice
-				close(out)
-			}
-			mu.Unlock()
 		}()
 	}
 
-	return out
+	select {
+	case <-finChan:
+	case err := <-errChan:
+		panic(err)
+	}
 }
 
 type workItem struct {

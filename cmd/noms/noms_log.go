@@ -80,13 +80,19 @@ func runLog(args []string) int {
 	}
 
 	inChan := make(chan interface{}, parallelism)
-	outChan := orderedparallel.New(inChan, func(node interface{}) interface{} {
-		buff := &bytes.Buffer{}
-		printCommit(node.(LogNode), buff, database)
-		return buff.Bytes()
-	}, parallelism)
+	outChan := make(chan interface{})
 
 	go func() {
+		orderedparallel.New(inChan, outChan, func(node interface{}) interface{} {
+			buff := &bytes.Buffer{}
+			printCommit(node.(LogNode), buff, database)
+			return buff.Bytes()
+		}, parallelism)
+		close(outChan)
+	}()
+
+	go func() {
+		defer types.RecoverFromClosedError()
 		for ln, ok := iter.Next(); ok && displayed < maxCommits; ln, ok = iter.Next() {
 			inChan <- ln
 			displayed++

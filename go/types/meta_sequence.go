@@ -142,21 +142,20 @@ func (ms metaSequenceObject) getChildSequence(idx int) sequence {
 	return mt.getChildSequence(ms.vr)
 }
 
-func (ms metaSequenceObject) beginFetchingChildSequences(start, length uint64) chan interface{} {
+func (ms metaSequenceObject) beginFetchingChildSequences(output chan interface{}, start, length uint64) {
 	input := make(chan interface{})
-	output := orderedparallel.New(input, func(item interface{}) interface{} {
-		i := item.(int)
-		return ms.getChildSequence(i)
-	}, int(length))
 
 	go func() {
 		for i := start; i < start+length; i++ {
 			input <- int(i)
 		}
-
 		close(input)
 	}()
-	return output
+
+	orderedparallel.New(input, output, func(item interface{}) interface{} {
+		i := item.(int)
+		return ms.getChildSequence(i)
+	}, int(length))
 }
 
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
@@ -176,7 +175,13 @@ func (ms metaSequenceObject) getCompositeChildSequence(start uint64, length uint
 		isIndexedSequence = true
 	}
 
-	output := ms.beginFetchingChildSequences(start, length)
+	output := make(chan interface{})
+	go func() {
+		defer RecoverFromClosedError()
+		ms.beginFetchingChildSequences(output, start, length)
+		close(output)
+	}()
+
 	for item := range output {
 		seq := item.(sequence)
 

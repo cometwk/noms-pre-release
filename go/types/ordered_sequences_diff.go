@@ -5,6 +5,7 @@
 package types
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
@@ -56,7 +57,10 @@ func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, chan
 
 	wg.Add(2)
 	go func() {
-		defer wg.Done()
+		defer func() {
+			RecoverFromClosedError()
+			wg.Done()
+		}()
 		orderedSequenceDiffLeftRight(last, current, lrChanges, lrStopChan)
 		close(lrChanges)
 	}()
@@ -251,4 +255,14 @@ func doFastForward(allowPastEnd bool, a *sequenceCursor, b *sequenceCursor) (aHa
 
 func isCurrentEqual(a *sequenceCursor, b *sequenceCursor) bool {
 	return a.seq.getCompareFn(b.seq)(a.idx, b.idx)
+}
+
+// See https://github.com/attic-labs/noms/issues/2235
+func RecoverFromClosedError() {
+	if r := recover(); r != nil {
+		// testify turns the perfectly reasonable leveldb.ErrClosed into a string including a stack trace... so we need to string match.
+		if s, ok := r.(string); !ok || !strings.Contains(s, `"leveldb: closed"`) {
+			panic(r)
+		}
+	}
 }
