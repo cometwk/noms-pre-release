@@ -14,6 +14,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
+// TODO: Test with a max line writer!
+
 var (
 	aa1  = createMap("a1", "a-one", "a2", "a-two", "a3", "a-three", "a4", "a-four")
 	aa1x = createMap("a1", "a-one-diff", "a2", "a-two", "a3", "a-three", "a4", "a-four")
